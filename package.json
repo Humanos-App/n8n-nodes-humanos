@@ -13,23 +13,26 @@
     "credentials",
     "api",
     "automation",
-    "workflow",
-    "authorization",
-    "ai"
+    "workflow"
   ],
   "license": "MIT",
+  "files": [
+    "dist",
+    "humanos.png",
+    "humanos.svg"
+  ],
   "author": {
     "name": "Humanos",
     "url": "https://humanos.id"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/humanos-id/n8n-nodes-humanos.git"
+    "url": "git+https://github.com/Humanos-App/n8n-nodes-humanos"
   },
   "bugs": {
-    "url": "https://github.com/humanos-id/n8n-nodes-humanos/issues"
+    "url": "https://github.com/Humanos-App/n8n-nodes-humanos/issues"
   },
-  "homepage": "https://github.com/humanos-id/n8n-nodes-humanos#readme",
+  "homepage": "https://github.com/Humanos-App/n8n-nodes-humanos#readme",
   "engines": {
     "node": ">=18"
   },
