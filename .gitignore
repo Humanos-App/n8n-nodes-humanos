@@ -1,0 +1,87 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+*.js
+*.d.ts
+*.js.map
+!gulpfile.js
+!jest.config.js
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.pem
+*.key
+*.crt
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Test files and coverage
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+test-*.js
+__tests__/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# n8n specific
+.n8n/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Build artifacts
+*.tgz
+*.tar.gz
+
+# Local development scripts (not needed in package)
+rebuild-and-run.sh
+fix-nodes-not-showing.sh
+check-n8n-setup.sh
+test-*.js
+

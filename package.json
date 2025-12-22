@@ -1,0 +1,91 @@
+{
+  "name": "n8n-nodes-humanos",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "description": "n8n community nodes for integrating with the Humanos API - KYC, identity verification, and credential management",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "humanos",
+    "kyc",
+    "identity-verification",
+    "credentials",
+    "api",
+    "automation",
+    "workflow",
+    "authorization",
+    "ai"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Humanos",
+    "url": "https://humanos.id"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/humanos-id/n8n-nodes-humanos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/humanos-id/n8n-nodes-humanos/issues"
+  },
+  "homepage": "https://github.com/humanos-id/n8n-nodes-humanos#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc && cp humanos.png dist/nodes/humanos.png && cp humanos.png dist/humanos.png",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "n8n": {
+    "credentials": [
+      {
+        "file": "dist/credentials/HumanosApi.credentials.js"
+      }
+    ],
+    "nodes": [
+      {
+        "file": "dist/nodes/HumanosListRequests.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosCreateRequest.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosGetRequestDetail.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosCancelRequest.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosResendOtp.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosListResources.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosListResourceGroups.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosDownloadResource.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosCreateUser.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosGet.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosWebhook.node.js"
+      }
+    ]
+  },
+  "dependencies": {
+    "n8n-workflow": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.3"
+  }
+}
