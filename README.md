@@ -1,4 +1,4 @@
-# @humanos-api/n8n-nodes
+# @humanos-ai/n8n-nodes
 
 ![Humanos](humanos.png)
 
@@ -13,14 +13,14 @@ Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes
 ### npm
 
 ```bash
-npm install @humanos-api/n8n-nodes
+npm install @humanos-ai/n8n-nodes
 ```
 
 ### In n8n
 
 1. Go to **Settings > Community Nodes**
 2. Select **Install**
-3. Enter `@humanos-api/n8n-nodes` and click **Install**
+3. Enter `@humanos-ai/n8n-nodes` and click **Install**
 
 ## Nodes
 
@@ -86,7 +86,7 @@ Link the package to your local n8n installation:
 ```bash
 npm link
 cd ~/.n8n/custom
-npm link @humanos-api/n8n-nodes
+npm link @humanos-ai/n8n-nodes
 ```
 
 Then restart n8n to load the nodes.
