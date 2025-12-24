@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-humanos",
+  "name": "@humanos-api/n8n-nodes",
   "version": "1.0.0",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -19,7 +19,9 @@
   "files": [
     "dist",
     "humanos.png",
-    "humanos.svg"
+    "humanos.svg",
+    "LICENSE",
+    "README.md"
   ],
   "author": {
     "name": "Humanos",
@@ -27,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Humanos-App/n8n-nodes-humanos"
+    "url": "git+https://github.com/Humanos-App/n8n-nodes-humanos.git"
   },
   "bugs": {
     "url": "https://github.com/Humanos-App/n8n-nodes-humanos/issues"

@@ -19,3 +19,57 @@ export function generateSignature(
   hmac.update(toSign);
   return hmac.digest("hex");
 }
+
+/**
+ * Verifies webhook signature
+ * @param data - Encrypted payload data (as string)
+ * @param signature - Signature from x-signature header
+ * @param timestamp - Timestamp from x-timestamp header
+ * @param secret - Signature secret
+ * @returns True if signature is valid
+ */
+export function verifySignature(
+  data: string,
+  signature: string,
+  timestamp: string,
+  secret: string
+): boolean {
+  const expected = generateSignature(data, secret, parseInt(timestamp, 10));
+  return signature === expected;
+}
+
+/**
+ * Decrypts webhook payload using AES-256-GCM
+ * @param encryptedPayload - Encrypted payload object with iv, data, and tag
+ * @param encryptionSecret - Base64-encoded encryption secret
+ * @param encryptionSalt - Encryption salt
+ * @returns Decrypted JSON string
+ */
+export function decryptPayload(
+  encryptedPayload: { iv: string; data: string; tag: string },
+  encryptionSecret: string,
+  encryptionSalt: string
+): string {
+  const key = crypto.pbkdf2Sync(
+    Buffer.from(encryptionSecret, "base64"),
+    encryptionSalt,
+    10000,
+    32,
+    "sha256"
+  );
+
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(encryptedPayload.iv, "base64")
+  );
+
+  decipher.setAuthTag(Buffer.from(encryptedPayload.tag, "base64"));
+
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(encryptedPayload.data, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+
+  return decrypted;
+}

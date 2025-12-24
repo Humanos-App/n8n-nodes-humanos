@@ -85,3 +85,5 @@ fix-nodes-not-showing.sh
 check-n8n-setup.sh
 test-*.js
 
+# Documentation
+docs/

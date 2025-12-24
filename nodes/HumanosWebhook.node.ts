@@ -6,7 +6,11 @@ import {
   IWebhookResponseData,
   IDataObject,
 } from "n8n-workflow";
-import { generateSignature } from "../utils/signature";
+import {
+  generateSignature,
+  verifySignature,
+  decryptPayload,
+} from "../utils/signature";
 
 export class HumanosWebhook implements INodeType {
   description: INodeTypeDescription = {
@@ -63,35 +67,19 @@ export class HumanosWebhook implements INodeType {
         type: "multiOptions",
         options: [
           {
-            name: "KYC Completed",
-            value: "process.kyc.completed",
+            name: "OTP Failed",
+            value: "otp.failed",
           },
           {
-            name: "User Signature Completed",
-            value: "process.signature.user.completed",
+            name: "Identity",
+            value: "identity",
           },
           {
-            name: "Professional Signature Completed",
-            value: "process.signature.professional.completed",
-          },
-          {
-            name: "Consent Completed",
-            value: "process.consent.completed",
-          },
-          {
-            name: "Form Filled",
-            value: "process.form.filled",
-          },
-          {
-            name: "Form Rejected",
-            value: "process.form.rejected",
-          },
-          {
-            name: "Process Completed",
-            value: "process.completed",
+            name: "Credential",
+            value: "credential",
           },
         ],
-        default: ["process.kyc.completed"],
+        default: ["identity", "credential", "otp.failed"],
         description: "The events to listen for",
         displayOptions: {
           show: {
@@ -110,32 +98,16 @@ export class HumanosWebhook implements INodeType {
             description: "Trigger on any webhook event",
           },
           {
-            name: "KYC Completed",
-            value: "process.kyc.completed",
+            name: "OTP Failed",
+            value: "otp.failed",
           },
           {
-            name: "User Signature Completed",
-            value: "process.signature.user.completed",
+            name: "Identity",
+            value: "identity",
           },
           {
-            name: "Professional Signature Completed",
-            value: "process.signature.professional.completed",
-          },
-          {
-            name: "Consent Completed",
-            value: "process.consent.completed",
-          },
-          {
-            name: "Form Filled",
-            value: "process.form.filled",
-          },
-          {
-            name: "Form Rejected",
-            value: "process.form.rejected",
-          },
-          {
-            name: "Process Completed",
-            value: "process.completed",
+            name: "Credential",
+            value: "credential",
           },
         ],
         default: "*",
@@ -323,20 +295,110 @@ export class HumanosWebhook implements INodeType {
   };
 
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
+    const req = this.getRequestObject();
+    const headers = req.headers || {};
     const bodyData = this.getBodyData();
-    const autoRegister = this.getNodeParameter("autoRegister") as boolean;
 
-    // Event filtering for manual registration mode
-    if (!autoRegister) {
-      const eventFilter = this.getNodeParameter("eventFilter") as string;
+    // Get credentials for authentication and decryption
+    const credentials = await this.getCredentials("humanosApi");
 
-      // Safely check for event type in bodyData
-      let eventType = null;
-      if (bodyData && typeof bodyData === "object") {
-        eventType = (bodyData as any).event || (bodyData as any).type;
+    if (!credentials) {
+      throw new Error("Credentials are required for webhook authentication");
+    }
+
+    const webhookSignatureSecret = credentials.webhookSignatureSecret as string;
+    const encryptionSecret = credentials.encryptionSecret as string;
+    const encryptionSalt = credentials.encryptionSalt as string;
+
+    if (!webhookSignatureSecret || !encryptionSecret || !encryptionSalt) {
+      throw new Error(
+        "Webhook Signature Secret, Encryption Secret, and Encryption Salt are required for webhook authentication"
+      );
+    }
+
+    // Get signature and timestamp from headers (case-insensitive)
+    const getHeader = (name: string): string | undefined => {
+      const lowerName = name.toLowerCase();
+      for (const key in headers) {
+        if (key.toLowerCase() === lowerName) {
+          const value = headers[key];
+          return Array.isArray(value) ? value[0] : value;
+        }
       }
+      return undefined;
+    };
 
-      if (eventFilter !== "*" && eventType && eventType !== eventFilter) {
+    const signature = getHeader("x-signature");
+    const timestamp = getHeader("x-timestamp");
+
+    if (!signature || !timestamp) {
+      throw new Error("Missing x-signature or x-timestamp headers");
+    }
+
+    // Verify signature
+    // The signature is computed over the encrypted payload (JSON string representation)
+    // According to the docs, signature is computed on the request body as JSON string
+    const bodyStringForSignature =
+      typeof bodyData === "string" ? bodyData : JSON.stringify(bodyData || {});
+
+    const isValidSignature = verifySignature(
+      bodyStringForSignature,
+      signature,
+      timestamp,
+      webhookSignatureSecret
+    );
+
+    if (!isValidSignature) {
+      throw new Error("Invalid webhook signature");
+    }
+
+    // Decrypt payload
+    // The encrypted payload should have iv, data, and tag fields
+    let decryptedData: any = {};
+
+    if (bodyData && typeof bodyData === "object") {
+      const encryptedPayload = bodyData as {
+        iv?: string;
+        data?: string;
+        tag?: string;
+      };
+
+      if (
+        encryptedPayload.iv &&
+        encryptedPayload.data &&
+        encryptedPayload.tag
+      ) {
+        try {
+          const decryptedString = decryptPayload(
+            {
+              iv: encryptedPayload.iv,
+              data: encryptedPayload.data,
+              tag: encryptedPayload.tag,
+            },
+            encryptionSecret,
+            encryptionSalt
+          );
+          decryptedData = JSON.parse(decryptedString);
+        } catch (error: any) {
+          throw new Error(
+            `Failed to decrypt webhook payload: ${error.message}`
+          );
+        }
+      } else {
+        // If payload doesn't have encryption fields, use as-is (for testing/backwards compatibility)
+        decryptedData = bodyData;
+      }
+    }
+
+    // Event filtering
+    const autoRegister = this.getNodeParameter("autoRegister") as boolean;
+    const eventFilter = autoRegister
+      ? "*"
+      : (this.getNodeParameter("eventFilter") as string);
+
+    if (eventFilter !== "*") {
+      const eventType = decryptedData.eventType;
+      if (eventType && eventType !== eventFilter) {
         // Event doesn't match filter, don't trigger workflow
         return {
           noWebhookResponse: true,
@@ -344,13 +406,10 @@ export class HumanosWebhook implements INodeType {
       }
     }
 
-    // Ensure bodyData is valid before processing
-    const processedData = bodyData || {};
-
-    // Return the webhook data to trigger the workflow
+    // Return the decrypted webhook data to trigger the workflow
     return {
       workflowData: [
-        this.helpers.returnJsonArray(processedData as IDataObject),
+        this.helpers.returnJsonArray(decryptedData as IDataObject),
       ],
     };
   }
