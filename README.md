@@ -1,7 +1,5 @@
 # @humanos-ai/n8n-nodes
 
-![Humanos](humanos.png)
-
 This is an n8n community node package for integrating with the [Humanos](https://humanos.id) API. It provides nodes for KYC verification, identity management, credential requests, and webhook handling.
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/reference/license/) workflow automation platform.
