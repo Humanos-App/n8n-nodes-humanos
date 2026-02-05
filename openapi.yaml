@@ -1,0 +1,1952 @@
+openapi: 3.0.0
+paths:
+  /v1/request:
+    get:
+      description: >-
+        Retrieve a paginated list of credential requests for your organization
+
+        You can filter requests by active status, search by name, filter by
+        subject ID or agent ID, and paginate through results.
+
+        Each request includes information about the credentials, subjects
+        (users), security level, and creation date.
+      operationId: getRequests
+      parameters:
+        - name: pageIndex
+          required: false
+          in: query
+          description: Page number
+          schema:
+            default: 0
+            example: 0
+            type: number
+        - name: pageSize
+          required: false
+          in: query
+          description: Number of items per page
+          schema:
+            minimum: 5
+            maximum: 100
+            default: 10
+            example: 10
+            type: number
+        - name: search
+          required: false
+          in: query
+          description: Search query to filter by name. Case-insensitive partial match.
+          schema:
+            maxLength: 120
+            example: example
+            type: string
+        - name: subjectDid
+          required: false
+          in: query
+          description: Filter requests by subject DID.
+          schema:
+            example: did:via:humanos:user-123
+            type: string
+        - name: subjectContact
+          required: false
+          in: query
+          description: Filter requests by subject contact (email or phone).
+          schema:
+            example: user@example.com
+            type: string
+        - name: subjectInternalId
+          required: false
+          in: query
+          description: Filter requests by subject internal ID.
+          schema:
+            example: internal-user-12345
+            type: string
+        - name: agentDid
+          required: false
+          in: query
+          description: Filter by agent DID.
+          schema:
+            example: did:via:humanos:agent-123
+            type: string
+        - name: securityLevel
+          required: false
+          in: query
+          description: Filter by security level. Can be a single value or array
+          examples:
+            - CONTACT
+            - - CONTACT
+              - ORGANIZATION_KYC
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - CONTACT
+                - ORGANIZATION_KYC
+                - HUMANOS_KYC
+                - HUMANOS_REVALIDATION
+        - name: dateFrom
+          required: false
+          in: query
+          description: Filter from date (will be converted to start of day)
+          schema:
+            format: date-time
+            example: '2025-01-01'
+            type: string
+        - name: dateTo
+          required: false
+          in: query
+          description: Filter to date (will be converted to end of day). Requires dateFrom.
+          schema:
+            format: date-time
+            example: '2025-12-31'
+            type: string
+      responses:
+        '200':
+          description: >-
+            Returns a paginated result with an array of credential request items
+            and the total number of pages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetRequestsResponseDto'
+      summary: Get
+      tags:
+        - Requests
+    post:
+      description: |-
+        Create a new credential request for one or more subjects (users).
+
+        This endpoint will:
+           Create credentials from resources or inline JSON data
+           Associate credentials with subjects
+           Generate and send OTPs for approval via email or SMS
+
+        Request details:
+           Resources can be specified via group IDs, resource IDs, or as inline JSON credentials
+           Maximum 30 credentials per request
+           Maximum 20 contacts per request
+           OTPs are automatically sent to all subjects after creation
+      operationId: generate
+      parameters: []
+      requestBody:
+        required: true
+        description: >-
+          Request body containing contacts (subjects), security level, and
+          resources to create credentials from.
+
+          Resources can be specified via groupIds, resourcesIds, or inline
+          credentials array.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequestDto'
+            examples:
+              withResources:
+                summary: Request with existing resources
+                value:
+                  contacts:
+                    - user@example.com
+                    - '+351912345678'
+                  securityLevel: CONTACT
+                  groupIds:
+                    - 507f1f77bcf86cd799439011
+                  resourcesIds:
+                    - 507f1f77bcf86cd799439012
+              withJsonCredentials:
+                summary: Request with inline JSON credentials
+                value:
+                  contacts:
+                    - user@example.com
+                  securityLevel: CONTACT
+                  credentials:
+                    - scope: payments.hotel
+                      type: document
+                      name: Hotel Booking Confirmation
+                      data:
+                        - type: string
+                          label: Hotel Name
+                          value: Grand Hotel
+                          hidden: false
+                        - type: date
+                          label: Check In
+                          value: '2025-02-01'
+                          hidden: false
+                        - type: date
+                          label: Check Out
+                          value: '2025-02-05'
+                          hidden: false
+              minimal:
+                summary: Minimal request
+                value:
+                  contacts:
+                    - user@example.com
+                  securityLevel: CONTACT
+                  resourcesIds:
+                    - 507f1f77bcf86cd799439012
+      responses:
+        '200':
+          description: >-
+            Returns the request ID, list of subjects (with their DIDs), and list
+            of created credentials (with IDs, names, and internal IDs).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRequestResponseDto'
+        '400':
+          description: |-
+            Bad request. This can occur when:
+              (1) No resources found (must provide at least one resource via groupIds, resourcesIds, or credentials)
+              (2) Maximum credentials exceeded (max 10 credentials allowed)
+              (3) Issuer key not found
+              (4) Contact not found
+              (5) Invalid request data, or
+              (6) Other validation errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: Failed to generate credentials request
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Create
+      tags:
+        - Requests
+  /v1/request/{requestId}:
+    get:
+      description: >-
+        Retrieve detailed information about a specific credential request
+
+        This includes complete W3C Verifiable Credential data for each
+        credential, subject information, agent details (if applicable), and
+        issuer information
+
+        The credentials are returned in W3C-compliant format and can be
+        cryptographically verified
+      operationId: getRequestDetail
+      parameters:
+        - name: requestId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the credential request. Must be a valid MongoDB
+            ObjectId.
+          schema:
+            example: 507f1f77bcf86cd799439011
+            type: string
+      responses:
+        '200':
+          description: >-
+            Returns complete information including W3C Verifiable Credentials,
+            subjects, agent (if applicable), and issuer details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetRequestDetailResponseDto'
+              example:
+                id: 507f1f77bcf86cd799439011
+                name: Employee Onboarding Request
+                createdAt: '2025-01-15T10:30:00Z'
+                securityLevel: CONTACT
+                credentials: []
+                subjects: []
+        '404':
+          description: >-
+            Request not found. This occurs when the request ID does not exist,
+            the request belongs to another organization, or the request has been
+            canceled.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: Request not found
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Get Detail
+      tags:
+        - Requests
+    delete:
+      description: >-
+        This action will cancel a credential request, by setting the canceledAt
+        timestamp on the request.
+
+        This operation is irreversible, and will prevent the request from being
+        processed further by the subjects
+      operationId: cancelRequest
+      parameters:
+        - name: requestId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the credential request to cancel. Must be a
+            valid MongoDB ObjectId.
+          schema:
+            example: 507f1f77bcf86cd799439011
+            type: string
+      responses:
+        '200':
+          description: Returns true to confirm the cancellation.
+          content:
+            application/json:
+              schema:
+                type: boolean
+        '404':
+          description: >-
+            The request ID does not exist, belongs to another organization or
+            has already been canceled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: Request not found or already canceled
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Cancel
+      tags:
+        - Requests
+  /v1/request/resend/{subjectOtpId}:
+    patch:
+      description: >
+        Resend a One-Time Password (OTP) to a subject for credential approval, 
+        via email or SMS (depending on their contact type) with a code and a
+        signing URL
+
+
+        The endpoint validates:
+          The request is not canceled
+          Maximum attempts have not been reached, only successful OTP sends count towards resend limits
+          Sufficient time has passed since the last successful resend
+          Billing restrictions apply
+      operationId: resendOtp
+      parameters:
+        - name: subjectOtpId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the SubjectOTP record. This ID is associated
+            with a specific subject (user) and credential request. Must be a
+            valid MongoDB ObjectId.
+          schema:
+            example: 507f1f77bcf86cd799439011
+            type: string
+      responses:
+        '200':
+          description: Returns true if the OTP was sent successfully via email or SMS.
+          content:
+            application/json:
+              schema:
+                type: boolean
+      summary: Resend OTP
+      tags:
+        - Requests
+  /v1/resource:
+    get:
+      description: |-
+        Retrieve a paginated list of resources for your organization. 
+              Resources can be documents, consents, forms. 
+              You can filter resources by type, search by name, filter by active status, and paginate through results. 
+              Only non-deleted resources are returned.
+      operationId: getResources
+      parameters:
+        - name: pageIndex
+          required: false
+          in: query
+          description: Page number
+          schema:
+            default: 0
+            example: 0
+            type: number
+        - name: pageSize
+          required: false
+          in: query
+          description: Number of items per page
+          schema:
+            minimum: 5
+            maximum: 100
+            default: 10
+            example: 10
+            type: number
+        - name: search
+          required: false
+          in: query
+          description: Search query to filter by name. Case-insensitive partial match.
+          schema:
+            maxLength: 120
+            example: example
+            type: string
+        - name: active
+          required: false
+          in: query
+          description: Filter by active status. Accepts true/false as string or boolean.
+          schema:
+            example: true
+            type: boolean
+        - name: types
+          required: false
+          in: query
+          description: >-
+            Filter by resource type. Can be a single value or array. Valid
+            values: CONSENT, FORM, DOCUMENT
+          schema:
+            example:
+              - DOCUMENT
+            type: array
+            items:
+              type: string
+              enum:
+                - CONSENT
+                - FORM
+                - DOCUMENT
+                - JSON
+      responses:
+        '200':
+          description: >-
+            Successfully retrieved resources. Returns a paginated result with an
+            array of resource items and the total number of pages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetResourcesResponseDto'
+      summary: Get Resources
+      tags:
+        - Resource
+  /v1/resource/group:
+    get:
+      description: >-
+        Retrieve a paginated list of resource groups (saved groups) for your
+        organization. 
+              Resource groups allow you to organize multiple resources together. 
+              You can filter groups by active status, search by group name or resource name, filter by resource types, and paginate through results.
+              Each group includes its associated resources.
+      operationId: getGroups
+      parameters:
+        - name: pageIndex
+          required: false
+          in: query
+          description: Page number
+          schema:
+            default: 0
+            example: 0
+            type: number
+        - name: pageSize
+          required: false
+          in: query
+          description: Number of items per page
+          schema:
+            minimum: 5
+            maximum: 100
+            default: 10
+            example: 10
+            type: number
+        - name: search
+          required: false
+          in: query
+          description: Search query to filter by name. Case-insensitive partial match.
+          schema:
+            maxLength: 120
+            example: example
+            type: string
+        - name: active
+          required: false
+          in: query
+          description: Filter by active status. Accepts true/false as string or boolean.
+          schema:
+            example: true
+            type: boolean
+        - name: types
+          required: false
+          in: query
+          description: >-
+            Filter by resource type. Can be a single value or array. Valid
+            values: CONSENT, FORM, DOCUMENT
+          schema:
+            example:
+              - DOCUMENT
+            type: array
+            items:
+              type: string
+              enum:
+                - CONSENT
+                - FORM
+                - DOCUMENT
+                - JSON
+      responses:
+        '200':
+          description: >-
+            Successfully retrieved resource groups. Returns a paginated result
+            with an array of group items (each containing its resources) and the
+            total number of pages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetGroupResourcesResponseDto'
+      summary: Get Groups
+      tags:
+        - Resource
+  /v1/user:
+    get:
+      description: >-
+        Retrieves detailed information about a user by their contact,
+        contactDid, or internalId. Exactly one search parameter must be
+        provided. Returns contact information, identity data (if available), and
+        the internal ID assigned by the organization.
+      operationId: getSubject
+      parameters:
+        - name: contact
+          required: false
+          in: query
+          description: Contact value (email or phone) to search for the user
+          schema:
+            example: user@example.com
+            type: string
+        - name: contactDid
+          required: false
+          in: query
+          description: DID associated with the contact to search for the user
+          schema:
+            example: did:via:humanos:user-abc123
+            type: string
+        - name: internalId
+          required: false
+          in: query
+          description: Internal ID assigned by the organization to search for the user
+          schema:
+            example: internal-user-12345
+            type: string
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetSubjectResponseDto'
+        '400':
+          description: >-
+            Invalid request parameters. Exactly one of contact, contactDid, or
+            internalId must be provided.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 400
+                  message:
+                    type: string
+                    example: No subjects provided
+                  error:
+                    type: string
+                    example: Bad Request
+        '404':
+          description: User not found or not accessible by this organization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: User not found
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Get User
+      tags:
+        - User
+    post:
+      description: >-
+        This endpoint allows organizations to import their existing users into
+        Humanos. Multiple users can be created in a single request. A user can
+        be created with just a contact (email or phone). Optionally, additional
+        identity information (KYC) can be included. Optionally, organizations
+        can attach an internal Id to allow mapping users within their database.
+      operationId: create
+      parameters: []
+      requestBody:
+        required: true
+        description: >-
+          Array of subjects to create. Each subject represents a user to be
+          imported into Humanos. Minimum 1 subject, maximum 100 subjects per
+          request. Each subject must have at least a contact (email or phone).
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateSubjectDto'
+            examples:
+              default:
+                value:
+                  - contact: user@example.com
+                    internalId: internal-user-123
+                    identity:
+                      fullName: John Doe
+                      birth: '1990-01-01'
+                      docId: '1234567890'
+                      countryAlpha3: PRT
+                  - contact: '+351912345678'
+                    internalId: internal-user-456
+                summary: Example request with multiple users
+      responses:
+        '200':
+          description: >-
+            Request processed successfully. Returns an array of feedback
+            objects, one for each subject in the request. The order of feedback
+            items matches the order of subjects in the request. Each feedback
+            contains a status code and optional data with user information.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CreateSubjectFeedbackDto'
+        '400':
+          description: >-
+            Bad request. This occurs when: no subjects are provided (empty
+            array), more than 100 subjects are provided, or the request body is
+            malformed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 400
+                  message:
+                    type: string
+                    example: No subjects provided
+                  error:
+                    type: string
+                    example: Bad Request
+      summary: Create User
+      tags:
+        - User
+  /v1/credential/{credentialId}:
+    get:
+      description: >-
+        Retrieve a specific credential by its ID
+
+        Returns the W3C Verifiable Credential data structure including
+        cryptographic proofs
+
+        Optionally includes the PDF content for document-type credentials
+      operationId: getCredential
+      parameters:
+        - name: credentialId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the credential. Must be a valid MongoDB
+            ObjectId.
+          schema:
+            example: 507f1f77bcf86cd799439011
+            type: string
+        - name: includePdf
+          required: false
+          in: query
+          description: Whether to include the PDF content for document-type credentials
+          schema:
+            default: false
+            example: false
+            type: boolean
+      responses:
+        '200':
+          description: >-
+            Returns the W3C Verifiable Credential structure with optional PDF
+            content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialResponseDto'
+        '404':
+          description: >-
+            Credential not found. This occurs when the credential ID does not
+            exist or belongs to another organization.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: Credential not found for issuer
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Get Credential
+      tags:
+        - Credentials
+  /health:
+    get:
+      description: >-
+        Returns the health status of the API service, including database, KMS,
+        and S3 connectivity.
+      operationId: healthCheck
+      parameters: []
+      responses:
+        '200':
+          description: Service is healthy
+        '503':
+          description: Service is unhealthy
+      summary: Health check
+      tags:
+        - Health
+info:
+  title: Humanos API
+  description: Humanos App Backend API
+  version: '1.0'
+  contact: {}
+tags:
+  - name: humanosApp
+    description: ''
+servers: []
+components:
+  securitySchemes:
+    bearer:
+      scheme: bearer
+      bearerFormat: JWT
+      type: http
+  schemas:
+    RequestQuery:
+      type: object
+      properties:
+        pageIndex:
+          type: number
+          description: Page number
+          example: 0
+          default: 0
+        pageSize:
+          type: number
+          description: Number of items per page
+          example: 10
+          minimum: 5
+          maximum: 100
+          default: 10
+        search:
+          type: string
+          description: Search query to filter by name. Case-insensitive partial match.
+          example: example
+          maxLength: 120
+        subjectDid:
+          type: string
+          description: Filter requests by subject DID.
+          example: did:via:humanos:user-123
+        subjectContact:
+          type: string
+          description: Filter requests by subject contact (email or phone).
+          example: user@example.com
+        subjectInternalId:
+          type: string
+          description: Filter requests by subject internal ID.
+          example: internal-user-12345
+        agentDid:
+          type: string
+          description: Filter by agent DID.
+          example: did:via:humanos:agent-123
+        securityLevel:
+          type: array
+          description: Filter by security level. Can be a single value or array
+          examples:
+            - CONTACT
+            - - CONTACT
+              - ORGANIZATION_KYC
+          items:
+            type: string
+            enum:
+              - CONTACT
+              - ORGANIZATION_KYC
+              - HUMANOS_KYC
+              - HUMANOS_REVALIDATION
+        dateFrom:
+          format: date-time
+          type: string
+          description: Filter from date (will be converted to start of day)
+          example: '2025-01-01'
+        dateTo:
+          format: date-time
+          type: string
+          description: Filter to date (will be converted to end of day). Requires dateFrom.
+          example: '2025-12-31'
+    CredentialItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the credential
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the credential
+          example: Identity Document
+        resourceType:
+          type: string
+          description: Type of resource for this credential (e.g., DOCUMENT, CONSENT, FORM)
+          example: DOCUMENT
+          nullable: true
+        internalId:
+          type: string
+          description: Internal ID of the credential (if provided during creation)
+          example: internal-credential-123
+          nullable: true
+        status:
+          type: string
+          description: Status of the credential
+          example: PENDING
+          enum:
+            - PENDING
+            - APPROVED
+            - REJECTED
+            - REVOKED
+      required:
+        - id
+        - status
+    SubjectItemDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the subject if exists and accessible
+          example: John Doe
+        did:
+          type: string
+          description: Decentralized Identifier (DID) of the contact
+          example: did:via:humanos:user-123
+        contact:
+          type: string
+          description: Contact of the subject (email or phone)
+          example: user@example.com
+      required:
+        - did
+        - contact
+    CredentialRequestItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the request
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the credential request
+          example: Employee Onboarding Request
+          nullable: true
+        securityLevel:
+          type: string
+          description: Identity level required for all subjects in this request
+          example: CONTACT
+          enum:
+            - CONTACT
+            - ORGANIZATION_KYC
+            - HUMANOS_KYC
+            - HUMANOS_REVALIDATION
+        credentials:
+          description: List of credentials included in this request
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialItemDto'
+        subjects:
+          description: List of subjects (users) associated with this request
+          example:
+            - id: 507f1f77bcf86cd799439011
+              name: John Doe
+              did: did:via:humanos:user-123
+              contact: user@example.com
+          type: array
+          items:
+            $ref: '#/components/schemas/SubjectItemDto'
+        createdAt:
+          type: string
+          description: Date and time of the request creation
+          example: '2025-01-15T10:30:00Z'
+          format: date-time
+      required:
+        - id
+        - securityLevel
+        - credentials
+        - subjects
+        - createdAt
+    GetRequestsResponseDto:
+      type: object
+      properties:
+        data:
+          description: Array of credential requests matching the query parameters
+          example:
+            id: 507f1f77bcf86cd799439011
+            name: Employee Onboarding Request
+            securityLevel: CONTACT
+            credentials:
+              - name: Identity Document
+                resourceType: DOCUMENT
+            subjects:
+              - id: 507f1f77bcf86cd799439011
+                name: John Doe
+                did: did:via:humanos:user-123
+                contact: user@example.com
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialRequestItemDto'
+        totalPages:
+          type: number
+          description: >-
+            Total number of pages available based on the page size and total
+            count
+          example: 5
+      required:
+        - data
+        - totalPages
+    CredentialW3CDto:
+      type: object
+      properties:
+        '@context':
+          type: object
+          description: JSON-LD context for the W3C Verifiable Credential
+          example:
+            - https://www.w3.org/ns/credentials/v2
+        id:
+          type: string
+          description: Unique identifier for the credential
+          example: https://example.com/credentials/123
+        type:
+          type: object
+          description: Type of the credential
+          example:
+            - VerifiableCredential
+        issuer:
+          type: string
+          description: Issuer of the credential (DID)
+          example: did:via:humanos:issuer-123
+        issuanceDate:
+          type: string
+          description: VC 1.1 issuance date (deprecated, use validFrom)
+          example: '2025-01-15T10:30:00Z'
+        expirationDate:
+          type: string
+          description: VC 1.1 expiration date (deprecated, use validUntil)
+          example: '2026-01-15T10:30:00Z'
+        validFrom:
+          type: string
+          description: VC 2.0 valid from date
+          example: '2025-01-15T10:30:00Z'
+        validUntil:
+          type: string
+          description: VC 2.0 valid until date
+          example: '2026-01-15T10:30:00Z'
+        credentialSubject:
+          type: object
+          description: Credential subject containing the actual credential data
+          example:
+            id: did:via:humanos:user-123
+            name: John Doe
+        proof:
+          description: Cryptographic proof(s) for the credential
+          example:
+            - proofValue: z6Mk...
+          type: array
+          items:
+            type: string
+        name:
+          type: string
+          description: Name of the credential
+          nullable: true
+        resourceType:
+          type: string
+          description: Resource type of the credential
+          nullable: true
+        status:
+          type: string
+          description: Status of the credential
+          example: PENDING
+        required:
+          type: boolean
+          description: Whether the credential is required
+          example: true
+      required:
+        - '@context'
+        - id
+        - type
+        - credentialSubject
+    CredentialDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the credential
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the credential
+          example: Identity Document
+        resourceType:
+          type: string
+          description: Type of resource for this credential (e.g., DOCUMENT, CONSENT, FORM)
+          example: DOCUMENT
+          nullable: true
+        internalId:
+          type: string
+          description: Internal ID of the credential (if provided during creation)
+          example: internal-credential-123
+          nullable: true
+        status:
+          type: string
+          description: Status of the credential
+          example: PENDING
+          enum:
+            - PENDING
+            - APPROVED
+            - REJECTED
+            - REVOKED
+        w3cCredential:
+          description: >-
+            W3C Verifiable Credential data structure. This is a complete
+            W3C-compliant credential that can be verified cryptographically.
+          allOf:
+            - $ref: '#/components/schemas/CredentialW3CDto'
+        data:
+          description: Raw mandate data array containing the credential field values.
+          items:
+            type: array
+          type: array
+      required:
+        - id
+        - status
+        - w3cCredential
+        - data
+    AgentDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the agent
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the agent
+          example: Travel Assistant Agent
+          nullable: true
+        did:
+          type: object
+          description: DID information for the agent including cryptographic keys
+          example:
+            id: 507f1f77bcf86cd799439012
+            did: did:via:humanos:agent-123
+            active: true
+            revoked: false
+            keys:
+              - publicKeyMultibase: z6Mk...
+        description:
+          type: string
+          description: Description of the agent
+          example: AI assistant for travel bookings
+          nullable: true
+        apiKey:
+          type: object
+          description: API key information for the agent
+          nullable: true
+          example:
+            key: ak_abc123xyz
+            name: Travel Agent API Key
+      required:
+        - id
+        - did
+    IssuerDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the issuer (organization)
+          example: 507f1f77bcf86cd799439013
+        name:
+          type: string
+          description: Name of the issuer organization
+          example: Acme Corporation
+          nullable: true
+        did:
+          type: object
+          description: DID information for the issuer including cryptographic keys
+          example:
+            id: 507f1f77bcf86cd799439014
+            did: did:via:humanos:issuer-123
+            active: true
+            revoked: false
+            keys:
+              - publicKeyMultibase: z6Mk...
+      required:
+        - id
+        - did
+    GetRequestDetailResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the request
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the credential request
+          example: Employee Onboarding Request
+          nullable: true
+        securityLevel:
+          type: string
+          description: Identity level required for all subjects in this request
+          example: CONTACT
+          enum:
+            - CONTACT
+            - ORGANIZATION_KYC
+            - HUMANOS_KYC
+            - HUMANOS_REVALIDATION
+        subjects:
+          description: List of subjects (users) associated with this request
+          example:
+            - id: 507f1f77bcf86cd799439011
+              name: John Doe
+              did: did:via:humanos:user-123
+              contact: user@example.com
+          type: array
+          items:
+            $ref: '#/components/schemas/SubjectItemDto'
+        createdAt:
+          type: string
+          description: Date and time of the request creation
+          example: '2025-01-15T10:30:00Z'
+          format: date-time
+        credentials:
+          description: >-
+            List of credentials included in this request. Each credential
+            contains W3C Verifiable Credential data that can be
+            cryptographically verified.
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialDetailDto'
+        agent:
+          description: >-
+            Agent information if this request was created by an agent. Null if
+            created directly by the organization.
+          allOf:
+            - $ref: '#/components/schemas/AgentDetailDto'
+        issuer:
+          description: Issuer information (your organization) that created this request
+          allOf:
+            - $ref: '#/components/schemas/IssuerDetailDto'
+      required:
+        - id
+        - securityLevel
+        - subjects
+        - createdAt
+        - credentials
+        - issuer
+    GenerateRequestDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name to be assigned to the request
+          example: My request
+        contacts:
+          description: Array of contact emails or phone numbers
+          example:
+            - john.doe@example.com
+            - '+1234567890'
+          type: array
+          items:
+            type: string
+        securityLevel:
+          type: string
+          description: Security level
+          example: CONTACT
+        allowDuplicates:
+          type: boolean
+          description: Group resources IDs
+          example:
+            - '1234567890'
+        groupIds:
+          description: Group resources IDs
+          example:
+            - '1234567890'
+          type: array
+          items:
+            type: string
+        resourcesIds:
+          description: Group resources IDs
+          example:
+            - '1234567890'
+          type: array
+          items:
+            type: string
+        credentials:
+          description: >-
+            Credentials for the request. Each credential contains a type, name,
+            data array, and optional internal ID.
+          examples:
+            - - scope: humanos.credential.request
+                type: DOCUMENT
+                name: Document 1
+                internalId: '1234567890'
+                data:
+                  - label: pdf
+                    value: base64 encoded PDF
+                    type: pdf
+                    hidden: false
+            - - scope: humanos.credential.request
+                type: CONSENT
+                name: Consent 1
+                data:
+                  - label: text
+                    value: consent text displayed to the user
+                    type: string
+                    hidden: false
+                  - label: url
+                    value: optional consent redirect link
+                    type: string
+                    hidden: false
+          type: array
+          items:
+            type: string
+        language:
+          type: string
+          description: Language
+          example: ENG
+      required:
+        - contacts
+        - securityLevel
+    CreatedSubjectDto:
+      type: object
+      properties:
+        did:
+          type: string
+          description: DID of the subject
+          example: did:via:humanos:user-123
+        contactType:
+          type: string
+          description: Type of contact used for the subject (e.g., PHONE, EMAIL)
+          example: EMAIL
+        contact:
+          type: string
+          description: Contact detail used to reach the subject
+          example: '+15555555555'
+        code:
+          type: string
+          description: |-
+            Code for the subject-OTP link. 
+                Only present if the issuer is configured to not send the OTP.
+          example: '123456'
+        link:
+          type: string
+          description: |-
+            Link to the subject-OTP link. 
+                Only present if the issuer is configured to not send the OTP.
+          example: https://app.humanos.id/link/507f1f77bcf86cd799439011
+      required:
+        - did
+        - contactType
+        - contact
+    CreatedCredentialDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the created credential
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the credential
+          example: Identity Document
+          nullable: true
+        internalId:
+          type: string
+          description: Internal ID of the credential (if provided during creation)
+          example: internal-credential-123
+          nullable: true
+      required:
+        - id
+    CreateRequestResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the created credential request
+          example: 507f1f77bcf86cd799439011
+        subjects:
+          description: >-
+            List of subjects (users) associated with this request. OTPs have
+            been sent to each subject for credential approval.
+          example:
+            - id: 507f1f77bcf86cd799439011
+              did: did:via:humanos:user-123
+          type: array
+          items:
+            $ref: '#/components/schemas/CreatedSubjectDto'
+        credentials:
+          description: >-
+            List of credentials created in this request. Each credential is
+            associated with one or more subjects.
+          example:
+            - id: 507f1f77bcf86cd799439012
+              name: Identity Document
+              internalId: internal-credential-123
+          type: array
+          items:
+            $ref: '#/components/schemas/CreatedCredentialDto'
+      required:
+        - id
+        - subjects
+        - credentials
+    ResourceItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the resource
+          example: 507f1f77bcf86cd799439011
+        type:
+          type: string
+          description: Type of the resource
+          example: DOCUMENT
+          enum:
+            - CONSENT
+            - FORM
+            - DOCUMENT
+        name:
+          type: string
+          description: Name of the resource
+          example: Identity Document
+        description:
+          type: string
+          description: Description of the resource
+          example: Official identity document for verification
+          nullable: true
+        active:
+          type: boolean
+          description: Whether the resource is currently active
+          example: true
+        internalId:
+          type: string
+          description: Internal ID of the resource (if provided during creation)
+          example: internal-resource-123
+          nullable: true
+        groupIds:
+          description: Array of group IDs that this resource belongs to
+          example:
+            - 507f1f77bcf86cd799439011
+          items:
+            type: array
+          type: array
+        typeFormId:
+          type: string
+          description: TypeForm ID (for FORM resources)
+          example: abc123def456
+          nullable: true
+        content:
+          type: string
+          description: |-
+            Content of the resource. The structure depends on the resource type:
+            - DOCUMENT: Base64 encoded PDF string
+            - CONSENT: Text of the consent
+            - FORM: Form configuration data
+          example: >-
+            JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDEvTWVkaWFCb3hbMCAwIDU5NSA4NDJdPj4...
+          nullable: true
+        consentUrl:
+          type: string
+          description: Link to the consent
+          example: https://www.example.com/consent
+          nullable: true
+        updatedAt:
+          type: string
+          description: Date and time of the resource last update
+          example: '2025-01-15T10:30:00Z'
+          format: date-time
+      required:
+        - id
+        - type
+        - name
+        - active
+        - groupIds
+        - updatedAt
+    GetResourcesResponseDto:
+      type: object
+      properties:
+        data:
+          description: Array of resources matching the query parameters
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceItemDto'
+        totalPages:
+          type: number
+          description: >-
+            Total number of pages available based on the page size and total
+            count
+          example: 5
+      required:
+        - data
+        - totalPages
+    GroupResourceItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the resource
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the resource
+          example: Identity Document
+        type:
+          type: string
+          description: Type of the resource
+          example: DOCUMENT
+          enum:
+            - CONSENT
+            - FORM
+            - DOCUMENT
+        active:
+          type: boolean
+          description: Whether the resource is currently active
+          example: true
+        internalId:
+          type: string
+          description: Internal ID of the resource (if provided during creation)
+          example: internal-resource-123
+          nullable: true
+      required:
+        - id
+        - name
+        - type
+        - active
+    GroupItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the group
+          example: 507f1f77bcf86cd799439011
+        name:
+          type: string
+          description: Name of the group
+          example: Onboarding Resources
+        description:
+          type: string
+          description: Description of the group
+          example: Resources required for employee onboarding
+          nullable: true
+        active:
+          type: boolean
+          description: Whether the group is currently active
+          example: true
+        resources:
+          description: List of resources in this group
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupResourceItemDto'
+        updatedAt:
+          type: string
+          description: Date and time of the group last update
+          example: '2025-01-15T10:30:00Z'
+          format: date-time
+      required:
+        - id
+        - name
+        - active
+        - resources
+        - updatedAt
+    GetGroupResourcesResponseDto:
+      type: object
+      properties:
+        data:
+          description: Array of resource groups matching the query parameters
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupItemDto'
+        totalPages:
+          type: number
+          description: >-
+            Total number of pages available based on the page size and total
+            count
+          example: 5
+      required:
+        - data
+        - totalPages
+    GetSubjectQueryDto:
+      type: object
+      properties:
+        contact:
+          type: string
+          description: Contact value (email or phone) to search for the user
+          example: user@example.com
+        contactDid:
+          type: string
+          description: DID associated with the contact to search for the user
+          example: did:via:humanos:user-abc123
+        internalId:
+          type: string
+          description: Internal ID assigned by the organization to search for the user
+          example: internal-user-12345
+    SubjectContactDto:
+      type: object
+      properties:
+        contact:
+          type: string
+          description: Contact value (email address or phone number)
+          example: user@example.com
+        type:
+          type: string
+          description: Type of contact
+          enum:
+            - EMAIL
+            - PHONE
+          example: EMAIL
+        verified:
+          type: boolean
+          description: Whether the contact has been verified
+          example: true
+        did:
+          type: string
+          description: Decentralized Identifier (DID) associated with this contact
+          example: did:via:humanos:user-abc123
+      required:
+        - contact
+        - type
+        - verified
+        - did
+    SubjectIdentityDto:
+      type: object
+      properties:
+        docId:
+          type: string
+          description: Document ID number
+          example: '12345678'
+        countryAlpha3:
+          type: string
+          description: ISO 3166-1 alpha-3 country code
+          example: PRT
+        fullDocId:
+          type: string
+          description: Full document ID including any prefixes or suffixes
+          example: 12345678-9
+          nullable: true
+        fullName:
+          type: string
+          description: Full legal name as it appears on the identity document
+          example: John Doe
+        birth:
+          type: string
+          description: Date of birth in ISO 8601 format
+          example: '1990-01-01'
+          format: date
+        gender:
+          type: string
+          description: Gender as specified on the identity document
+          example: M
+          nullable: true
+        issueDate:
+          type: string
+          description: Issue date of the identity document
+          example: '2020-01-01'
+          format: date
+          nullable: true
+        taxNumber:
+          type: string
+          description: Tax identification number
+          example: '123456789'
+          nullable: true
+        healthNumber:
+          type: string
+          description: Health system identification number
+          example: '987654321'
+          nullable: true
+        socialSecurityNumber:
+          type: string
+          description: Social security number
+          example: 111-22-3333
+          nullable: true
+        photo:
+          type: string
+          description: Base64 encoded photo from the identity document
+          nullable: true
+        height:
+          type: string
+          description: Height as specified on the identity document
+          example: '1.75'
+          nullable: true
+        documentDiscriminator:
+          type: string
+          description: Document discriminator or serial number
+          example: ABC123
+          nullable: true
+        placeOfBirth:
+          type: string
+          description: Place of birth
+          example: Lisbon, Portugal
+          nullable: true
+        mrzText:
+          type: string
+          description: Machine Readable Zone (MRZ) text from the document
+          nullable: true
+        extra:
+          type: string
+          description: Additional document-specific data (JSON string)
+          nullable: true
+          example: '{"customField": "customValue"}'
+        expiresAt:
+          type: string
+          description: Expiration date of the identity document
+          example: '2030-01-01'
+          format: date
+          nullable: true
+      required:
+        - docId
+        - countryAlpha3
+        - fullName
+        - birth
+    GetSubjectResponseDto:
+      type: object
+      properties:
+        contacts:
+          description: List of contacts associated with the user
+          type: array
+          items:
+            $ref: '#/components/schemas/SubjectContactDto'
+        identity:
+          description: Identity information (KYC data) for the user, if available
+          allOf:
+            - $ref: '#/components/schemas/SubjectIdentityDto'
+        internalId:
+          type: string
+          description: Internal ID assigned by the organization
+          example: internal-user-12345
+          nullable: true
+      required:
+        - contacts
+    IdentityDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+          description: Full name of the person. Maximum 200 characters.
+          example: John Doe
+          maxLength: 200
+        birth:
+          type: string
+          description: >-
+            Birth date. Must be a valid date in the past. Format: YYYY-MM-DD or
+            ISO 8601.
+          example: '1990-01-01'
+          format: date
+        docId:
+          type: string
+          description: >-
+            Document ID number. Maximum 50 characters. Spaces will be
+            automatically removed.
+          example: '1234567890'
+          maxLength: 50
+        fullDocId:
+          type: string
+          description: >-
+            Full document ID (extended version). Must start with docId and
+            contain additional characters. Maximum 50 characters. Spaces will be
+            automatically removed.
+          example: '12345678901234'
+          maxLength: 50
+        countryAlpha3:
+          type: string
+          description: >-
+            3-letter ISO 3166-1 alpha-3 country code (e.g., PRT, USA, GBR). Must
+            be exactly 3 characters. Spaces will be automatically removed.
+          example: PRT
+          minLength: 3
+          maxLength: 3
+        gender:
+          type: string
+          description: Gender. Maximum 50 characters.
+          example: M
+          maxLength: 50
+        expiresAt:
+          type: string
+          description: 'Document expiration date. Format: YYYY-MM-DD or ISO 8601.'
+          example: '2025-01-01'
+          format: date
+        issueDate:
+          type: string
+          description: 'Document issue date. Format: YYYY-MM-DD or ISO 8601.'
+          example: '2010-01-01'
+          format: date
+        taxNumber:
+          type: string
+          description: Tax identification number. Maximum 50 characters.
+          example: '123456789'
+          maxLength: 50
+        healthNumber:
+          type: string
+          description: Health insurance number. Maximum 50 characters.
+          example: '987654321'
+          maxLength: 50
+        socialSecurityNumber:
+          type: string
+          description: Social security number. Maximum 50 characters.
+          example: '111222333'
+          maxLength: 50
+        photo:
+          type: string
+          description: >-
+            Photo of the person (base64 encoded or URL). Maximum 2000
+            characters.
+          example: data:image/jpeg;base64,/9j/4AAQSkZJRg...
+          maxLength: 2000
+        height:
+          type: string
+          description: Height of the person. Maximum 50 characters.
+          example: 175 cm
+          maxLength: 50
+        documentType:
+          type: string
+          description: >-
+            Type of document (e.g., passport, ID card, driver license). Maximum
+            50 characters.
+          example: passport
+          maxLength: 50
+        documentDiscriminator:
+          type: string
+          description: Document discriminator. Maximum 50 characters.
+          example: A
+          maxLength: 50
+        placeOfBirth:
+          type: string
+          description: Place of birth. Maximum 50 characters.
+          example: Lisbon
+          maxLength: 50
+        mrzText:
+          type: string
+          description: >-
+            Machine Readable Zone (MRZ) text from the document. Maximum 2000
+            characters.
+          example: P<PRTDOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<<<<
+          maxLength: 2000
+        extra:
+          type: string
+          description: >-
+            Additional extra information in JSON format. Maximum 2000
+            characters.
+          example: '{"notes": "Additional information"}'
+          maxLength: 2000
+      required:
+        - fullName
+        - birth
+        - docId
+        - countryAlpha3
+    CreateSubjectDto:
+      type: object
+      properties:
+        contact:
+          type: string
+          description: >-
+            Contact information for the user. Must be a valid email address or
+            phone number (e.g., "user@example.com" or "+351912345678"). Spaces
+            will be automatically removed from the contact value. This is the
+            only required field.
+          example: user@example.com
+        identity:
+          description: >-
+            Optional identity information (KYC data) for the user. When
+            provided, all identity fields will be validated. Required fields if
+            identity is provided: fullName, birth, docId, countryAlpha3.
+          allOf:
+            - $ref: '#/components/schemas/IdentityDto'
+        internalId:
+          type: string
+          description: >-
+            Optional internal identifier that allows organizations to map users
+            within their own database. This ID is stored and can be used to
+            reference the user in subsequent API calls. Useful for maintaining a
+            link between your internal user records and the Humanos user
+            records.
+          example: internal-user-12345
+      required:
+        - contact
+    SubjectDidDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the DID record
+          example: 507f1f77bcf86cd799439011
+        did:
+          type: string
+          description: >-
+            Full DID string following W3C DID standard (e.g.,
+            did:via:humanos:user-123)
+          example: did:via:humanos:user-123
+        active:
+          type: boolean
+          description: Whether the DID is currently active
+          example: true
+        revoked:
+          type: boolean
+          description: Whether the DID has been revoked
+          example: false
+      required:
+        - id
+        - did
+        - active
+        - revoked
+    SubjectDataDto:
+      type: object
+      properties:
+        contact:
+          type: string
+          description: Contact value (email or phone) for the created or updated user
+          example: user@example.com
+        internalId:
+          type: string
+          description: >-
+            Internal ID provided by the organization, if any. This is the same
+            internalId that was sent in the request, allowing you to map the
+            response back to your internal records.
+          example: internal-user-12345
+          nullable: true
+        did:
+          description: >-
+            Decentralized Identifier (DID) associated with the user. This is a
+            unique identifier following the W3C DID standard that can be used
+            for cryptographic operations.
+          allOf:
+            - $ref: '#/components/schemas/SubjectDidDto'
+      required:
+        - contact
+        - did
+    CreateSubjectFeedbackDto:
+      type: object
+      properties:
+        status:
+          type: number
+          description: >-
+            HTTP status code indicating the result of the operation for this
+            specific subject:
+
+            - 200: Success
+
+            - 400: Invalid contact
+
+            - 401: Invalid identity
+
+            - 402: Invalid country
+
+            - 407: Duplicate contact in request
+
+            - 408: Duplicate identity in request
+
+            - 409: Identity already exists for another user
+
+            - 410: Identity already exists for this user
+          example: 200
+          enum:
+            - 200
+            - 400
+            - 401
+            - 402
+            - 407
+            - 408
+            - 409
+            - 410
+        data:
+          description: >-
+            Response data containing user information if the operation was
+            successful (status 200), or null if there was an error. When status
+            is 200, this object contains contact, internalId (if provided), and
+            the DID information.
+          nullable: true
+          example:
+            contact: user@example.com
+            internalId: internal-user-12345
+            did:
+              id: 507f1f77bcf86cd799439012
+              did: did:via:humanos:user-123
+              active: true
+              revoked: false
+          allOf:
+            - $ref: '#/components/schemas/SubjectDataDto'
+        contact:
+          type: string
+          description: Internal ID of the subject
+          example: internal-user-12345
+          nullable: true
+        message:
+          type: string
+          description: Success message or error message
+          examples:
+            - Subject created
+            - This call contained this contact more than once
+          nullable: true
+      required:
+        - status
+    CredentialResponseDto:
+      type: object
+      properties:
+        credential:
+          type: object
+          description: W3C Verifiable Credential in JSON-LD format
+          example:
+            '@context':
+              - https://www.w3.org/ns/credentials/v2
+              - https://humanos.id/schemas/credential/v1
+            id: https://humanos.id/credentials/crd_abc123
+            type:
+              - VerifiableCredential
+            issuer: did:web:humanos.id
+            issuanceDate: '2025-01-01T00:00:00Z'
+            validFrom: '2025-01-01T00:00:00Z'
+            validUntil: '2026-01-01T00:00:00Z'
+            credentialSubject:
+              id: did:key:z6MkExample123
+              data:
+                - label: pdf
+                  type: pdf
+                  value: JVBERi0xLjQKJeLjz9...
+                  hidden: false
+            proof:
+              - type: DataIntegrityProof
+                cryptosuite: eddsa-jcs-2022
+                proofPurpose: assertionMethod
+                verificationMethod: did:web:humanos.id#key-1
+                proofValue: >-
+                  z58DAdFfa9SkqZMVPxAQpic7ndSayn1PzZs6ZjWp1CktyGesjuTSwRdoWhAfGFCF5bppETSTojQCrfFPP2oumHKtz
+                actionType: CREATE
+                actionProof: '0x1234567890abcdef'
+                createdAt: '2025-01-01T00:00:00Z'
+        internalId:
+          type: string
+          description: Internal identifier for the credential within the organization
+          example: EMP-2024-001
+        pdf:
+          type: string
+          description: >-
+            Base64-encoded PDF document (only included when includePdf=true and
+            resource type is DOCUMENT)
+          example: JVBERi0xLjQKJeLjz9...
+      required:
+        - credential

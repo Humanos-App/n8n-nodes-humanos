@@ -13,7 +13,7 @@ export class HumanosListResources implements INodeType {
     group: ["transform"],
     version: 1,
     description:
-      "GET /v1/resource - Retrieve resources (documents, forms, consents, products)",
+      "GET /v1/resource - Retrieve resources (documents, forms, consents)",
     defaults: { name: "List Resources" },
     inputs: ["main"],
     outputs: ["main"],
@@ -30,7 +30,7 @@ export class HumanosListResources implements INodeType {
         displayName: "Page Size",
         name: "pageSize",
         type: "number",
-        default: 20,
+        default: 10,
         description: "Number of items per page (5-100)",
         typeOptions: {
           minValue: 5,
@@ -59,7 +59,7 @@ export class HumanosListResources implements INodeType {
           { name: "Consent", value: "CONSENT" },
           { name: "Form", value: "FORM" },
           { name: "Document", value: "DOCUMENT" },
-          { name: "Product", value: "PRODUCT" },
+          { name: "JSON", value: "JSON" },
         ],
         default: [],
         description: "Filter by resource types",
