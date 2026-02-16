@@ -5,48 +5,41 @@ import {
 } from "n8n-workflow";
 import { generateSignature } from "../utils/signature";
 
-export class HumanosResendOtp implements INodeType {
+export class HumanosGetUser implements INodeType {
   description: INodeTypeDescription = {
-    displayName: "Humanos: Resend OTP",
-    name: "humanosResendOtp",
+    displayName: "Humanos: Get User",
+    name: "humanosGetUser",
     icon: "file:humanos.png",
     group: ["transform"],
     version: 1,
     description:
-      "PATCH /v1/request/resend/{requestId} - Resend OTP to a subject for credential approval",
-    defaults: { name: "Resend OTP" },
+      "GET /v1/user - Retrieve user information by contact, DID, or internal ID",
+    defaults: { name: "Get User" },
     inputs: ["main"],
     outputs: ["main"],
     credentials: [{ name: "humanosApi", required: true }],
     properties: [
       {
-        displayName: "Request ID",
-        name: "requestId",
-        type: "string",
-        default: "",
-        description: "Unique identifier of the credential request",
-        required: true,
-      },
-      {
         displayName: "Lookup By",
         name: "lookupBy",
         type: "options",
         options: [
-          { name: "Contact", value: "contact" },
+          { name: "Contact (Email/Phone)", value: "contact" },
           { name: "Contact DID", value: "contactDid" },
           { name: "Internal ID", value: "internalId" },
         ],
         default: "contact",
         required: true,
-        description: "How to identify the subject to resend OTP to (exactly one required)",
+        description: "How to search for the user (exactly one required)",
       },
       {
         displayName: "Contact",
         name: "contact",
         type: "string",
         default: "",
-        description: "Email or phone number of the subject",
+        description: "Email address or phone number of the user",
         required: true,
+        placeholder: "user@example.com",
         displayOptions: {
           show: {
             lookupBy: ["contact"],
@@ -58,8 +51,9 @@ export class HumanosResendOtp implements INodeType {
         name: "contactDid",
         type: "string",
         default: "",
-        description: "DID associated with the subject contact (e.g., did:via:humanos:user-123)",
+        description: "DID associated with the user contact (e.g., did:via:humanos:user-abc123)",
         required: true,
+        placeholder: "did:via:humanos:user-abc123",
         displayOptions: {
           show: {
             lookupBy: ["contactDid"],
@@ -73,6 +67,7 @@ export class HumanosResendOtp implements INodeType {
         default: "",
         description: "Internal ID assigned by the organization",
         required: true,
+        placeholder: "internal-user-12345",
         displayOptions: {
           show: {
             lookupBy: ["internalId"],
@@ -90,7 +85,6 @@ export class HumanosResendOtp implements INodeType {
         ? credentials.customBaseUrl
         : credentials.baseUrl;
 
-    const requestId = this.getNodeParameter("requestId", 0) as string;
     const lookupBy = this.getNodeParameter("lookupBy", 0) as string;
 
     const qs: Record<string, string> = {};
@@ -102,7 +96,7 @@ export class HumanosResendOtp implements INodeType {
       qs.internalId = this.getNodeParameter("internalId", 0) as string;
     }
 
-    const path = `/request/resend/${requestId}`;
+    const path = "/user";
     const url = `${baseUrl}${path}`;
     const timestamp = Date.now();
     const body = "";
@@ -111,7 +105,7 @@ export class HumanosResendOtp implements INodeType {
 
     try {
       const res = await this.helpers.httpRequest({
-        method: "PATCH",
+        method: "GET",
         url,
         qs,
         json: true,
@@ -122,7 +116,7 @@ export class HumanosResendOtp implements INodeType {
         },
       });
 
-      return [this.helpers.returnJsonArray([{ success: res, requestId }])];
+      return [this.helpers.returnJsonArray([res])];
     } catch (error: any) {
       const errorMessage = error.response?.data
         ? JSON.stringify(error.response.data)

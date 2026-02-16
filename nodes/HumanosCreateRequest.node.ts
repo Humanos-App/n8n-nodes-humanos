@@ -19,6 +19,13 @@ export class HumanosCreateRequest implements INodeType {
     credentials: [{ name: "humanosApi", required: true }],
     properties: [
       {
+        displayName: "Request Name",
+        name: "name",
+        type: "string",
+        default: "",
+        description: "Name to be assigned to the request",
+      },
+      {
         displayName: "Contacts",
         name: "contacts",
         type: "string",
@@ -83,12 +90,34 @@ export class HumanosCreateRequest implements INodeType {
         name: "credentials",
         type: "json",
         default: "[]",
-        description: "Array of credential objects",
+        description: "Array of credential objects with scope, type, name, and data fields",
         displayOptions: {
           show: {
             resourceType: ["credentials"],
           },
         },
+      },
+      {
+        displayName: "Allow Duplicates",
+        name: "allowDuplicates",
+        type: "boolean",
+        default: false,
+        description: "Whether to allow duplicate credential requests for the same contacts",
+      },
+      {
+        displayName: "Language",
+        name: "language",
+        type: "string",
+        default: "",
+        description: "Language code for the request (e.g., ENG, PRT)",
+      },
+      {
+        displayName: "Signature Placements JSON",
+        name: "signaturePlacements",
+        type: "json",
+        default: "[]",
+        description:
+          "Array of signature placement objects for PDF documents. Each object: { resourceId, contact, x (0-100%), y (0-100%), width (0-100%), height (0-100%), pageIndex (0-based) }",
       },
     ],
   };
@@ -101,9 +130,13 @@ export class HumanosCreateRequest implements INodeType {
         ? credentials.customBaseUrl
         : credentials.baseUrl;
 
+    const name = this.getNodeParameter("name", 0) as string;
     const contactsInput = this.getNodeParameter("contacts", 0) as string;
     const securityLevel = this.getNodeParameter("securityLevel", 0) as string;
     const resourceType = this.getNodeParameter("resourceType", 0) as string;
+    const allowDuplicates = this.getNodeParameter("allowDuplicates", 0) as boolean;
+    const language = this.getNodeParameter("language", 0) as string;
+    const signaturePlacementsInput = this.getNodeParameter("signaturePlacements", 0) as string;
 
     const contacts = contactsInput
       .split(",")
@@ -114,6 +147,10 @@ export class HumanosCreateRequest implements INodeType {
       contacts,
       securityLevel,
     };
+
+    if (name) bodyObj.name = name;
+    if (allowDuplicates) bodyObj.allowDuplicates = allowDuplicates;
+    if (language) bodyObj.language = language;
 
     // Add resources based on type
     if (resourceType === "groupIds") {
@@ -147,6 +184,18 @@ export class HumanosCreateRequest implements INodeType {
       }
     }
 
+    // Add signature placements if provided
+    if (signaturePlacementsInput) {
+      try {
+        const placements = JSON.parse(signaturePlacementsInput);
+        if (Array.isArray(placements) && placements.length > 0) {
+          bodyObj.signaturePlacements = placements;
+        }
+      } catch (error) {
+        throw new Error("Invalid JSON in signature placements field");
+      }
+    }
+
     const body = JSON.stringify(bodyObj);
     const path = "/request";
     const url = `${baseUrl}${path}`;
@@ -169,7 +218,14 @@ export class HumanosCreateRequest implements INodeType {
 
       return [this.helpers.returnJsonArray([res])];
     } catch (error: any) {
-      throw new Error(`Failed to create request: ${error.message}`);
+      const errorMessage = error.response?.data
+        ? JSON.stringify(error.response.data)
+        : error.message || JSON.stringify(error);
+      throw new Error(
+        `Humanos API error (${
+          error.response?.status || "unknown"
+        }): ${errorMessage}`
+      );
     }
   }
 }

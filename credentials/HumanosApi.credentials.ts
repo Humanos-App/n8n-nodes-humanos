@@ -9,8 +9,11 @@ export class HumanosApi implements ICredentialType {
       displayName: "API Base URL",
       name: "baseUrl",
       type: "options",
-      options: [{ name: "Production", value: "https://api.humanos.id/v1" }],
-      default: "https://api.humanos.id/v1",
+      options: [
+        { name: "Local Development", value: "http://localhost:8010/v1" },
+        { name: "Production", value: "https://api.humanos.id/v1" },
+      ],
+      default: "http://localhost:8010/v1",
       description: "Select API environment",
     },
     {

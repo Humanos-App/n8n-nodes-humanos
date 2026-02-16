@@ -5,8 +5,8 @@ paths:
       description: >-
         Retrieve a paginated list of credential requests for your organization
 
-        You can filter requests by active status, search by name, filter by
-        subject ID or agent ID, and paginate through results.
+        You can filter requests by search by name, filter by
+        subject DID, contact, or internal ID, filter by agent DID, and paginate through results.
 
         Each request includes information about the credentials, subjects
         (users), security level, and creation date.
@@ -143,6 +143,7 @@ paths:
               withResources:
                 summary: Request with existing resources
                 value:
+                  name: Employee Onboarding
                   contacts:
                     - user@example.com
                     - '+351912345678'
@@ -174,6 +175,22 @@ paths:
                           label: Check Out
                           value: '2025-02-05'
                           hidden: false
+              withSignaturePlacements:
+                summary: Request with signature placements
+                value:
+                  contacts:
+                    - user@example.com
+                  securityLevel: CONTACT
+                  resourcesIds:
+                    - 507f1f77bcf86cd799439012
+                  signaturePlacements:
+                    - resourceId: 507f1f77bcf86cd799439012
+                      contact: user@example.com
+                      x: 100
+                      y: 200
+                      width: 150
+                      height: 50
+                      pageIndex: 0
               minimal:
                 summary: Minimal request
                 value:
@@ -248,13 +265,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetRequestDetailResponseDto'
-              example:
-                id: 507f1f77bcf86cd799439011
-                name: Employee Onboarding Request
-                createdAt: '2025-01-15T10:30:00Z'
-                securityLevel: CONTACT
-                credentials: []
-                subjects: []
         '404':
           description: >-
             Request not found. This occurs when the request ID does not exist,
@@ -323,13 +333,15 @@ paths:
       summary: Cancel
       tags:
         - Requests
-  /v1/request/resend/{subjectOtpId}:
+  /v1/request/resend/{requestId}:
     patch:
       description: >
-        Resend a One-Time Password (OTP) to a subject for credential approval, 
+        Resend a One-Time Password (OTP) to a subject for credential approval,
         via email or SMS (depending on their contact type) with a code and a
-        signing URL
+        signing URL.
 
+        Exactly one of the query parameters (contact, contactDid, internalId) must be provided
+        to identify the subject.
 
         The endpoint validates:
           The request is not canceled
@@ -338,15 +350,34 @@ paths:
           Billing restrictions apply
       operationId: resendOtp
       parameters:
-        - name: subjectOtpId
+        - name: requestId
           required: true
           in: path
           description: >-
-            Unique identifier of the SubjectOTP record. This ID is associated
-            with a specific subject (user) and credential request. Must be a
-            valid MongoDB ObjectId.
+            Unique identifier of the credential request. Must be a valid MongoDB ObjectId.
           schema:
             example: 507f1f77bcf86cd799439011
+            type: string
+        - name: contact
+          required: false
+          in: query
+          description: Contact value (email or phone) to identify the subject
+          schema:
+            example: user@example.com
+            type: string
+        - name: contactDid
+          required: false
+          in: query
+          description: DID associated with the subject contact
+          schema:
+            example: did:via:humanos:user-abc123
+            type: string
+        - name: internalId
+          required: false
+          in: query
+          description: Internal ID assigned by the organization
+          schema:
+            example: internal-user-12345
             type: string
       responses:
         '200':
@@ -361,9 +392,9 @@ paths:
   /v1/resource:
     get:
       description: |-
-        Retrieve a paginated list of resources for your organization. 
-              Resources can be documents, consents, forms. 
-              You can filter resources by type, search by name, filter by active status, and paginate through results. 
+        Retrieve a paginated list of resources for your organization.
+              Resources can be documents, consents, forms.
+              You can filter resources by type, search by name, filter by active status, and paginate through results.
               Only non-deleted resources are returned.
       operationId: getResources
       parameters:
@@ -433,8 +464,8 @@ paths:
     get:
       description: >-
         Retrieve a paginated list of resource groups (saved groups) for your
-        organization. 
-              Resource groups allow you to organize multiple resources together. 
+        organization.
+              Resource groups allow you to organize multiple resources together.
               You can filter groups by active status, search by group name or resource name, filter by resource types, and paginate through results.
               Each group includes its associated resources.
       operationId: getGroups
@@ -703,6 +734,142 @@ paths:
       summary: Get Credential
       tags:
         - Credentials
+  /v1/via/health:
+    get:
+      description: >-
+        Returns the health status of the VIA Protocol service, including protocol version.
+      operationId: viaHealthCheck
+      parameters: []
+      responses:
+        '200':
+          description: VIA Protocol service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViaHealthResponseDto'
+      summary: VIA Health Check
+      tags:
+        - VIA Protocol
+  /v1/via/mandates/{mandateId}:
+    get:
+      description: >-
+        Retrieve detailed information about a specific mandate.
+
+        Returns the mandate scope, constraints (financial, temporal, scope, velocity),
+        authorized agents, approval policy, validity period, and current status.
+      operationId: getMandate
+      parameters:
+        - name: mandateId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the mandate (format: mdt_<uuid>).
+          schema:
+            example: mdt_abc123xyz
+            type: string
+      responses:
+        '200':
+          description: Returns the mandate details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandateResponseDto'
+        '404':
+          description: Mandate not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusCode:
+                    type: number
+                    example: 404
+                  message:
+                    type: string
+                    example: Mandate not found
+                  error:
+                    type: string
+                    example: Not Found
+      summary: Get Mandate
+      tags:
+        - VIA Protocol
+  /v1/via/mandates/{mandateId}/vc:
+    get:
+      description: >-
+        Retrieve a mandate as a W3C Verifiable Credential.
+
+        Supports both W3C VC 1.1 and 2.0 formats via the version query parameter.
+        The credential includes cryptographic proof (DataIntegrityProof with Ed25519).
+      operationId: getMandateVc
+      parameters:
+        - name: mandateId
+          required: true
+          in: path
+          description: >-
+            Unique identifier of the mandate (format: mdt_<uuid>).
+          schema:
+            example: mdt_abc123xyz
+            type: string
+        - name: version
+          required: false
+          in: query
+          description: W3C Verifiable Credential spec version (default 2.0)
+          schema:
+            type: string
+            enum:
+              - '1.1'
+              - '2.0'
+            default: '2.0'
+      responses:
+        '200':
+          description: Returns the mandate as a W3C Verifiable Credential.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifiableCredentialResponseDto'
+        '404':
+          description: Mandate not found.
+      summary: Get Mandate as VC
+      tags:
+        - VIA Protocol
+  /v1/via/dids/{did}:
+    get:
+      description: >-
+        Resolve a Decentralized Identifier (DID) to its DID Document.
+
+        Supports did:key and did:via formats. Returns the DID Document
+        containing verification methods, authentication, and assertion methods.
+      operationId: resolveDid
+      parameters:
+        - name: did
+          required: true
+          in: path
+          description: >-
+            The DID to resolve (URL-encoded). Supports did:key:z6Mk... and did:via:humanos:... formats.
+          schema:
+            example: did:via:humanos:user-123
+            type: string
+        - name: timeout
+          required: false
+          in: query
+          description: Optional timeout in milliseconds for DID resolution
+          schema:
+            type: number
+            example: 5000
+      responses:
+        '200':
+          description: Returns the DID Document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DIDDocumentResponseDto'
+        '404':
+          description: DID not found or could not be resolved.
+        '408':
+          description: DID resolution timed out.
+      summary: Resolve DID
+      tags:
+        - VIA Protocol
   /health:
     get:
       description: >-
@@ -724,8 +891,18 @@ info:
   version: '1.0'
   contact: {}
 tags:
-  - name: humanosApp
-    description: ''
+  - name: Requests
+    description: 'Credential request management'
+  - name: Resource
+    description: 'Resource and resource group management'
+  - name: User
+    description: 'User (subject) management'
+  - name: Credentials
+    description: 'Credential retrieval'
+  - name: VIA Protocol
+    description: 'VIA (Verified Intent Approval) Protocol endpoints for mandate management and DID resolution'
+  - name: Health
+    description: 'Service health checks'
 servers: []
 components:
   securitySchemes:
@@ -873,11 +1050,6 @@ components:
             $ref: '#/components/schemas/CredentialItemDto'
         subjects:
           description: List of subjects (users) associated with this request
-          example:
-            - id: 507f1f77bcf86cd799439011
-              name: John Doe
-              did: did:via:humanos:user-123
-              contact: user@example.com
           type: array
           items:
             $ref: '#/components/schemas/SubjectItemDto'
@@ -897,18 +1069,6 @@ components:
       properties:
         data:
           description: Array of credential requests matching the query parameters
-          example:
-            id: 507f1f77bcf86cd799439011
-            name: Employee Onboarding Request
-            securityLevel: CONTACT
-            credentials:
-              - name: Identity Document
-                resourceType: DOCUMENT
-            subjects:
-              - id: 507f1f77bcf86cd799439011
-                name: John Doe
-                did: did:via:humanos:user-123
-                contact: user@example.com
           type: array
           items:
             $ref: '#/components/schemas/CredentialRequestItemDto'
@@ -966,11 +1126,9 @@ components:
             name: John Doe
         proof:
           description: Cryptographic proof(s) for the credential
-          example:
-            - proofValue: z6Mk...
           type: array
           items:
-            type: string
+            type: object
         name:
           type: string
           description: Name of the credential
@@ -1069,9 +1227,6 @@ components:
           type: object
           description: API key information for the agent
           nullable: true
-          example:
-            key: ak_abc123xyz
-            name: Travel Agent API Key
       required:
         - id
         - did
@@ -1123,11 +1278,6 @@ components:
             - HUMANOS_REVALIDATION
         subjects:
           description: List of subjects (users) associated with this request
-          example:
-            - id: 507f1f77bcf86cd799439011
-              name: John Doe
-              did: did:via:humanos:user-123
-              contact: user@example.com
           type: array
           items:
             $ref: '#/components/schemas/SubjectItemDto'
@@ -1182,9 +1332,8 @@ components:
           example: CONTACT
         allowDuplicates:
           type: boolean
-          description: Group resources IDs
-          example:
-            - '1234567890'
+          description: Whether to allow duplicate credential requests for the same contacts
+          example: false
         groupIds:
           description: Group resources IDs
           example:
@@ -1193,7 +1342,7 @@ components:
           items:
             type: string
         resourcesIds:
-          description: Group resources IDs
+          description: Resource IDs
           example:
             - '1234567890'
           type: array
@@ -1203,38 +1352,64 @@ components:
           description: >-
             Credentials for the request. Each credential contains a type, name,
             data array, and optional internal ID.
-          examples:
-            - - scope: humanos.credential.request
-                type: DOCUMENT
-                name: Document 1
-                internalId: '1234567890'
-                data:
-                  - label: pdf
-                    value: base64 encoded PDF
-                    type: pdf
-                    hidden: false
-            - - scope: humanos.credential.request
-                type: CONSENT
-                name: Consent 1
-                data:
-                  - label: text
-                    value: consent text displayed to the user
-                    type: string
-                    hidden: false
-                  - label: url
-                    value: optional consent redirect link
-                    type: string
-                    hidden: false
           type: array
           items:
-            type: string
+            type: object
         language:
           type: string
-          description: Language
+          description: Language code for the request
           example: ENG
+        signaturePlacements:
+          description: >-
+            Array of signature placement objects for positioning signatures on PDF documents.
+            Each placement specifies coordinates (percentage-based) and page index.
+          type: array
+          items:
+            $ref: '#/components/schemas/SignaturePlacementItemDto'
       required:
         - contacts
         - securityLevel
+    SignaturePlacementItemDto:
+      type: object
+      properties:
+        resourceId:
+          type: string
+          description: Resource ID for the document to place signature on
+          example: 507f1f77bcf86cd799439011
+        inlineCredentialIndex:
+          type: number
+          description: Index of inline credential (alternative to resourceId)
+        contact:
+          type: string
+          description: Contact (email/phone) of the signer
+          example: user@example.com
+        x:
+          type: number
+          description: X coordinate for signature placement
+          example: 100
+        'y':
+          type: number
+          description: Y coordinate for signature placement
+          example: 200
+        width:
+          type: number
+          description: Width of signature area
+          example: 150
+        height:
+          type: number
+          description: Height of signature area
+          example: 50
+        pageIndex:
+          type: number
+          description: Page index (0-based) for signature placement
+          example: 0
+      required:
+        - contact
+        - x
+        - 'y'
+        - width
+        - height
+        - pageIndex
     CreatedSubjectDto:
       type: object
       properties:
@@ -1253,13 +1428,13 @@ components:
         code:
           type: string
           description: |-
-            Code for the subject-OTP link. 
+            Code for the subject-OTP link.
                 Only present if the issuer is configured to not send the OTP.
           example: '123456'
         link:
           type: string
           description: |-
-            Link to the subject-OTP link. 
+            Link to the subject-OTP link.
                 Only present if the issuer is configured to not send the OTP.
           example: https://app.humanos.id/link/507f1f77bcf86cd799439011
       required:
@@ -1296,9 +1471,6 @@ components:
           description: >-
             List of subjects (users) associated with this request. OTPs have
             been sent to each subject for credential approval.
-          example:
-            - id: 507f1f77bcf86cd799439011
-              did: did:via:humanos:user-123
           type: array
           items:
             $ref: '#/components/schemas/CreatedSubjectDto'
@@ -1306,10 +1478,6 @@ components:
           description: >-
             List of credentials created in this request. Each credential is
             associated with one or more subjects.
-          example:
-            - id: 507f1f77bcf86cd799439012
-              name: Identity Document
-              internalId: internal-credential-123
           type: array
           items:
             $ref: '#/components/schemas/CreatedCredentialDto'
@@ -1354,9 +1522,9 @@ components:
           description: Array of group IDs that this resource belongs to
           example:
             - 507f1f77bcf86cd799439011
-          items:
-            type: array
           type: array
+          items:
+            type: string
         typeFormId:
           type: string
           description: TypeForm ID (for FORM resources)
@@ -1369,8 +1537,6 @@ components:
             - DOCUMENT: Base64 encoded PDF string
             - CONSENT: Text of the consent
             - FORM: Form configuration data
-          example: >-
-            JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDEvTWVkaWFCb3hbMCAwIDU5NSA4NDJdPj4...
           nullable: true
         consentUrl:
           type: string
@@ -1669,15 +1835,13 @@ components:
           type: string
           description: >-
             Full document ID (extended version). Must start with docId and
-            contain additional characters. Maximum 50 characters. Spaces will be
-            automatically removed.
+            contain additional characters. Maximum 50 characters.
           example: '12345678901234'
           maxLength: 50
         countryAlpha3:
           type: string
           description: >-
-            3-letter ISO 3166-1 alpha-3 country code (e.g., PRT, USA, GBR). Must
-            be exactly 3 characters. Spaces will be automatically removed.
+            3-letter ISO 3166-1 alpha-3 country code (e.g., PRT, USA, GBR).
           example: PRT
           minLength: 3
           maxLength: 3
@@ -1713,10 +1877,7 @@ components:
           maxLength: 50
         photo:
           type: string
-          description: >-
-            Photo of the person (base64 encoded or URL). Maximum 2000
-            characters.
-          example: data:image/jpeg;base64,/9j/4AAQSkZJRg...
+          description: Photo of the person (base64 encoded or URL). Maximum 2000 characters.
           maxLength: 2000
         height:
           type: string
@@ -1725,9 +1886,7 @@ components:
           maxLength: 50
         documentType:
           type: string
-          description: >-
-            Type of document (e.g., passport, ID card, driver license). Maximum
-            50 characters.
+          description: Type of document. Maximum 50 characters.
           example: passport
           maxLength: 50
         documentDiscriminator:
@@ -1742,16 +1901,11 @@ components:
           maxLength: 50
         mrzText:
           type: string
-          description: >-
-            Machine Readable Zone (MRZ) text from the document. Maximum 2000
-            characters.
-          example: P<PRTDOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<<<<
+          description: Machine Readable Zone (MRZ) text. Maximum 2000 characters.
           maxLength: 2000
         extra:
           type: string
-          description: >-
-            Additional extra information in JSON format. Maximum 2000
-            characters.
+          description: Additional extra information in JSON format. Maximum 2000 characters.
           example: '{"notes": "Additional information"}'
           maxLength: 2000
       required:
@@ -1766,25 +1920,17 @@ components:
           type: string
           description: >-
             Contact information for the user. Must be a valid email address or
-            phone number (e.g., "user@example.com" or "+351912345678"). Spaces
-            will be automatically removed from the contact value. This is the
-            only required field.
+            phone number.
           example: user@example.com
         identity:
           description: >-
-            Optional identity information (KYC data) for the user. When
-            provided, all identity fields will be validated. Required fields if
-            identity is provided: fullName, birth, docId, countryAlpha3.
+            Optional identity information (KYC data) for the user.
           allOf:
             - $ref: '#/components/schemas/IdentityDto'
         internalId:
           type: string
           description: >-
-            Optional internal identifier that allows organizations to map users
-            within their own database. This ID is stored and can be used to
-            reference the user in subsequent API calls. Useful for maintaining a
-            link between your internal user records and the Humanos user
-            records.
+            Optional internal identifier for mapping users within your database.
           example: internal-user-12345
       required:
         - contact
@@ -1797,9 +1943,7 @@ components:
           example: 507f1f77bcf86cd799439011
         did:
           type: string
-          description: >-
-            Full DID string following W3C DID standard (e.g.,
-            did:via:humanos:user-123)
+          description: Full DID string following W3C DID standard
           example: did:via:humanos:user-123
         active:
           type: boolean
@@ -1823,17 +1967,11 @@ components:
           example: user@example.com
         internalId:
           type: string
-          description: >-
-            Internal ID provided by the organization, if any. This is the same
-            internalId that was sent in the request, allowing you to map the
-            response back to your internal records.
+          description: Internal ID provided by the organization, if any.
           example: internal-user-12345
           nullable: true
         did:
-          description: >-
-            Decentralized Identifier (DID) associated with the user. This is a
-            unique identifier following the W3C DID standard that can be used
-            for cryptographic operations.
+          description: Decentralized Identifier (DID) associated with the user.
           allOf:
             - $ref: '#/components/schemas/SubjectDidDto'
       required:
@@ -1845,24 +1983,11 @@ components:
         status:
           type: number
           description: >-
-            HTTP status code indicating the result of the operation for this
-            specific subject:
-
-            - 200: Success
-
-            - 400: Invalid contact
-
-            - 401: Invalid identity
-
-            - 402: Invalid country
-
-            - 407: Duplicate contact in request
-
-            - 408: Duplicate identity in request
-
-            - 409: Identity already exists for another user
-
-            - 410: Identity already exists for this user
+            HTTP status code indicating the result:
+            200: Success, 400: Invalid contact, 401: Invalid identity,
+            402: Invalid country, 407: Duplicate contact in request,
+            408: Duplicate identity in request, 409: Identity already exists for another user,
+            410: Identity already exists for this user
           example: 200
           enum:
             - 200
@@ -1875,32 +2000,17 @@ components:
             - 410
         data:
           description: >-
-            Response data containing user information if the operation was
-            successful (status 200), or null if there was an error. When status
-            is 200, this object contains contact, internalId (if provided), and
-            the DID information.
+            Response data containing user information if successful (status 200), or null if error.
           nullable: true
-          example:
-            contact: user@example.com
-            internalId: internal-user-12345
-            did:
-              id: 507f1f77bcf86cd799439012
-              did: did:via:humanos:user-123
-              active: true
-              revoked: false
           allOf:
             - $ref: '#/components/schemas/SubjectDataDto'
         contact:
           type: string
-          description: Internal ID of the subject
-          example: internal-user-12345
+          description: Contact of the subject
           nullable: true
         message:
           type: string
           description: Success message or error message
-          examples:
-            - Subject created
-            - This call contained this contact more than once
           nullable: true
       required:
         - status
@@ -1910,34 +2020,6 @@ components:
         credential:
           type: object
           description: W3C Verifiable Credential in JSON-LD format
-          example:
-            '@context':
-              - https://www.w3.org/ns/credentials/v2
-              - https://humanos.id/schemas/credential/v1
-            id: https://humanos.id/credentials/crd_abc123
-            type:
-              - VerifiableCredential
-            issuer: did:web:humanos.id
-            issuanceDate: '2025-01-01T00:00:00Z'
-            validFrom: '2025-01-01T00:00:00Z'
-            validUntil: '2026-01-01T00:00:00Z'
-            credentialSubject:
-              id: did:key:z6MkExample123
-              data:
-                - label: pdf
-                  type: pdf
-                  value: JVBERi0xLjQKJeLjz9...
-                  hidden: false
-            proof:
-              - type: DataIntegrityProof
-                cryptosuite: eddsa-jcs-2022
-                proofPurpose: assertionMethod
-                verificationMethod: did:web:humanos.id#key-1
-                proofValue: >-
-                  z58DAdFfa9SkqZMVPxAQpic7ndSayn1PzZs6ZjWp1CktyGesjuTSwRdoWhAfGFCF5bppETSTojQCrfFPP2oumHKtz
-                actionType: CREATE
-                actionProof: '0x1234567890abcdef'
-                createdAt: '2025-01-01T00:00:00Z'
         internalId:
           type: string
           description: Internal identifier for the credential within the organization
@@ -1947,6 +2029,236 @@ components:
           description: >-
             Base64-encoded PDF document (only included when includePdf=true and
             resource type is DOCUMENT)
-          example: JVBERi0xLjQKJeLjz9...
       required:
         - credential
+    ViaHealthResponseDto:
+      type: object
+      properties:
+        protocol:
+          type: string
+          description: Protocol name
+          example: via-protocol
+        version:
+          type: string
+          description: Protocol version
+          example: '1.0.0'
+        status:
+          type: string
+          description: Service status
+          example: ok
+          enum:
+            - ok
+            - error
+        timestamp:
+          type: string
+          description: Current server timestamp
+          format: date-time
+      required:
+        - protocol
+        - version
+        - status
+        - timestamp
+    MandateResponseDto:
+      type: object
+      properties:
+        mandate_id:
+          type: string
+          description: Unique identifier for the mandate
+          example: mdt_abc123xyz
+        user_id:
+          type: string
+          description: User who created the mandate
+          example: usr_xyz789
+        scope:
+          type: string
+          description: Scope of authorization
+          example: payments.hotel
+        constraints:
+          type: object
+          description: CEL-based constraints (financial, temporal, scope, velocity)
+          example:
+            financial:
+              maxAmountPerTransaction: 500
+              maxDailyTotal: 1500
+            temporal:
+              validDays: [monday, tuesday, wednesday, thursday, friday]
+              timeWindow: { start: '09:00', end: '18:00' }
+        authorized_agents:
+          type: array
+          description: List of agents authorized by this mandate
+          items:
+            type: object
+            properties:
+              agent_did:
+                type: string
+                example: did:key:z6MkAgent456
+              agent_name:
+                type: string
+                example: Claude Desktop
+              capabilities:
+                type: array
+                items:
+                  type: string
+              status:
+                type: string
+                enum:
+                  - active
+                  - suspended
+                  - revoked
+        approval_policy:
+          type: object
+          description: Approval policy for the mandate
+          nullable: true
+        valid_from:
+          type: string
+          format: date-time
+          description: Start of validity period
+        valid_until:
+          type: string
+          format: date-time
+          description: End of validity period
+        kyc_required:
+          type: boolean
+          description: Whether KYC verification is required
+        status:
+          type: string
+          description: Current mandate status
+          enum:
+            - active
+            - revoked
+            - expired
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked_reason:
+          type: string
+          nullable: true
+      required:
+        - mandate_id
+        - user_id
+        - scope
+        - constraints
+        - authorized_agents
+        - valid_from
+        - valid_until
+        - kyc_required
+        - status
+        - created_at
+    VerifiableCredentialResponseDto:
+      type: object
+      properties:
+        '@context':
+          type: array
+          description: W3C JSON-LD contexts
+          items:
+            type: string
+        id:
+          type: string
+          description: Credential identifier
+        type:
+          type: array
+          description: Credential types
+          items:
+            type: string
+          example:
+            - VerifiableCredential
+            - MandateCredential
+        issuer:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Issuer DID
+            name:
+              type: string
+              description: Issuer name
+              nullable: true
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        credentialSubject:
+          type: object
+          description: Contains mandate data as credential subject
+        proof:
+          type: object
+          description: DataIntegrityProof with Ed25519 signature
+          properties:
+            type:
+              type: string
+              example: DataIntegrityProof
+            cryptosuite:
+              type: string
+            created:
+              type: string
+              format: date-time
+            verificationMethod:
+              type: string
+            proofPurpose:
+              type: string
+            proofValue:
+              type: string
+      required:
+        - '@context'
+        - id
+        - type
+        - issuer
+        - validFrom
+        - validUntil
+        - credentialSubject
+        - proof
+    DIDDocumentResponseDto:
+      type: object
+      properties:
+        '@context':
+          type: array
+          description: DID Document JSON-LD contexts
+          items:
+            type: string
+        id:
+          type: string
+          description: The DID being resolved
+          example: did:via:humanos:user-123
+        verificationMethod:
+          type: array
+          description: Verification methods associated with this DID
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Key identifier (DID#key-id)
+              type:
+                type: string
+                description: Key type
+                example: Ed25519VerificationKey2020
+              controller:
+                type: string
+                description: DID that controls this key
+              publicKeyMultibase:
+                type: string
+                description: Public key in multibase format
+        authentication:
+          type: array
+          description: Authentication method references
+          items:
+            type: string
+        assertionMethod:
+          type: array
+          description: Assertion method references
+          items:
+            type: string
+      required:
+        - '@context'
+        - id
+        - verificationMethod

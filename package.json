@@ -73,7 +73,10 @@
         "file": "dist/nodes/HumanosListResourceGroups.node.js"
       },
       {
-        "file": "dist/nodes/HumanosDownloadResource.node.js"
+        "file": "dist/nodes/HumanosGetCredential.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosGetUser.node.js"
       },
       {
         "file": "dist/nodes/HumanosCreateUser.node.js"
@@ -83,6 +86,18 @@
       },
       {
         "file": "dist/nodes/HumanosWebhook.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosViaHealth.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosViaGetMandate.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosViaGetMandateVc.node.js"
+      },
+      {
+        "file": "dist/nodes/HumanosViaResolveDid.node.js"
       }
     ]
   },

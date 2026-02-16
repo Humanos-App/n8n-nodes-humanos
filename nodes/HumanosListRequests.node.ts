@@ -41,28 +41,35 @@ export class HumanosListRequests implements INodeType {
         name: "search",
         type: "string",
         default: "",
-        description: "Search by request name",
+        description: "Search by request name (case-insensitive partial match)",
       },
       {
-        displayName: "Active Only",
-        name: "active",
-        type: "boolean",
-        default: true,
-        description: "Filter by active status",
-      },
-      {
-        displayName: "Subject ID",
-        name: "subjectId",
+        displayName: "Subject DID",
+        name: "subjectDid",
         type: "string",
         default: "",
-        description: "Filter by subject (user) ID",
+        description: "Filter requests by subject DID (e.g., did:via:humanos:user-123)",
       },
       {
-        displayName: "Agent ID",
-        name: "agentId",
+        displayName: "Subject Contact",
+        name: "subjectContact",
         type: "string",
         default: "",
-        description: "Filter by agent ID",
+        description: "Filter requests by subject contact (email or phone)",
+      },
+      {
+        displayName: "Subject Internal ID",
+        name: "subjectInternalId",
+        type: "string",
+        default: "",
+        description: "Filter requests by subject internal ID",
+      },
+      {
+        displayName: "Agent DID",
+        name: "agentDid",
+        type: "string",
+        default: "",
+        description: "Filter by agent DID (e.g., did:via:humanos:agent-123)",
       },
       {
         displayName: "Security Level",
@@ -82,14 +89,14 @@ export class HumanosListRequests implements INodeType {
         name: "dateFrom",
         type: "dateTime",
         default: "",
-        description: "Start date filter",
+        description: "Start date filter (will be converted to start of day)",
       },
       {
         displayName: "Date To",
         name: "dateTo",
         type: "dateTime",
         default: "",
-        description: "End date filter",
+        description: "End date filter (will be converted to end of day, requires Date From)",
       },
     ],
   };
@@ -105,9 +112,10 @@ export class HumanosListRequests implements INodeType {
     const pageIndex = this.getNodeParameter("pageIndex", 0) as number;
     const pageSize = this.getNodeParameter("pageSize", 0) as number;
     const search = this.getNodeParameter("search", 0) as string;
-    const active = this.getNodeParameter("active", 0) as boolean;
-    const subjectId = this.getNodeParameter("subjectId", 0) as string;
-    const agentId = this.getNodeParameter("agentId", 0) as string;
+    const subjectDid = this.getNodeParameter("subjectDid", 0) as string;
+    const subjectContact = this.getNodeParameter("subjectContact", 0) as string;
+    const subjectInternalId = this.getNodeParameter("subjectInternalId", 0) as string;
+    const agentDid = this.getNodeParameter("agentDid", 0) as string;
     const securityLevel = this.getNodeParameter("securityLevel", 0) as string[];
     const dateFrom = this.getNodeParameter("dateFrom", 0) as string;
     const dateTo = this.getNodeParameter("dateTo", 0) as string;
@@ -118,9 +126,10 @@ export class HumanosListRequests implements INodeType {
     };
 
     if (search) qs.search = search;
-    if (active !== undefined) qs.active = active;
-    if (subjectId) qs.subjectId = subjectId;
-    if (agentId) qs.agentId = agentId;
+    if (subjectDid) qs.subjectDid = subjectDid;
+    if (subjectContact) qs.subjectContact = subjectContact;
+    if (subjectInternalId) qs.subjectInternalId = subjectInternalId;
+    if (agentDid) qs.agentDid = agentDid;
     if (securityLevel && securityLevel.length > 0)
       qs.securityLevel = securityLevel;
     if (dateFrom) qs.dateFrom = dateFrom;
@@ -129,11 +138,9 @@ export class HumanosListRequests implements INodeType {
     const path = "/request";
     const url = `${baseUrl}${path}`;
 
-    // For GET requests, body is empty string
     const body = "";
     const timestamp = Date.now();
 
-    // Generate signature: empty body means sign only timestamp (no dot)
     const signature = generateSignature(body, signatureSecret, timestamp);
 
     try {
@@ -149,8 +156,6 @@ export class HumanosListRequests implements INodeType {
         },
       });
 
-      // Response has structure: { data: [...], totalCount: number, pageIndex: number, pageSize: number }
-      // Always return something, even if empty
       let dataArray: any[] = [];
 
       if (res && res.data && Array.isArray(res.data)) {
@@ -158,16 +163,14 @@ export class HumanosListRequests implements INodeType {
       } else if (Array.isArray(res)) {
         dataArray = res;
       } else if (res) {
-        // Return full response as single item if it's not an array
         dataArray = [res];
       }
 
-      // If still empty, return a metadata object so user knows the call succeeded
       if (dataArray.length === 0) {
         dataArray = [
           {
             message: "No requests found",
-            totalCount: res?.totalCount || 0,
+            totalPages: res?.totalPages || 0,
             pageIndex: pageIndex,
             pageSize: pageSize,
             apiResponse: res,
@@ -177,7 +180,6 @@ export class HumanosListRequests implements INodeType {
 
       return [this.helpers.returnJsonArray(dataArray)];
     } catch (error: any) {
-      // Make sure errors are always visible
       const errorMessage = error.response?.data
         ? JSON.stringify(error.response.data)
         : error.message || JSON.stringify(error);

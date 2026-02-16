@@ -5,31 +5,28 @@ import {
 } from "n8n-workflow";
 import { generateSignature } from "../utils/signature";
 
-export class HumanosDownloadResource implements INodeType {
+export class HumanosViaGetMandate implements INodeType {
   description: INodeTypeDescription = {
-    displayName: "Humanos: Download Resource",
-    name: "humanosDownloadResource",
+    displayName: "Humanos: VIA Get Mandate",
+    name: "humanosViaGetMandate",
     icon: "file:humanos.png",
     group: ["transform"],
     version: 1,
     description:
-      "GET /v1/resource/download/{id} - Download credential document as PDF",
-    defaults: { name: "Download Resource" },
+      "GET /v1/via/mandates/{mandateId} - Retrieve mandate details including scope, constraints, and authorized agents",
+    defaults: { name: "VIA Get Mandate" },
     inputs: ["main"],
     outputs: ["main"],
     credentials: [{ name: "humanosApi", required: true }],
     properties: [
       {
-        displayName: "Credential ID",
-        name: "credentialId",
+        displayName: "Mandate ID",
+        name: "mandateId",
         type: "string",
         default: "",
-        description:
-          "Unique identifier of the credential to download. " +
-          "Get this from 'Get Request Detail' → credentials[0].id. " +
-          "⚠️ IMPORTANT: The credential must have status 'COMPLETED' or 'ISSUED' to download. " +
-          "Credentials with status 'PENDING' cannot be downloaded yet.",
+        description: "Unique identifier of the mandate (format: mdt_<uuid>)",
         required: true,
+        placeholder: "mdt_abc123xyz",
       },
     ],
   };
@@ -42,9 +39,9 @@ export class HumanosDownloadResource implements INodeType {
         ? credentials.customBaseUrl
         : credentials.baseUrl;
 
-    const credentialId = this.getNodeParameter("credentialId", 0) as string;
+    const mandateId = this.getNodeParameter("mandateId", 0) as string;
 
-    const path = `/resource/download/${credentialId}`;
+    const path = `/via/mandates/${mandateId}`;
     const url = `${baseUrl}${path}`;
     const timestamp = Date.now();
     const body = "";
@@ -63,17 +60,16 @@ export class HumanosDownloadResource implements INodeType {
         },
       });
 
-      // Response: { fileContent: "base64...", internalId: "..." }
       return [this.helpers.returnJsonArray([res])];
     } catch (error: any) {
-      if (error.response) {
-        throw new Error(
-          `Humanos API error: ${error.response.status} ${error.response.statusText}. ` +
-          `URL: ${url}. ` +
-          `Response: ${JSON.stringify(error.response.data)}`
-        );
-      }
-      throw error;
+      const errorMessage = error.response?.data
+        ? JSON.stringify(error.response.data)
+        : error.message || JSON.stringify(error);
+      throw new Error(
+        `Humanos API error (${
+          error.response?.status || "unknown"
+        }): ${errorMessage}`
+      );
     }
   }
 }
