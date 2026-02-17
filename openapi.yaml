@@ -38,21 +38,21 @@ paths:
             maxLength: 120
             example: example
             type: string
-        - name: subjectDid
+        - name: did
           required: false
           in: query
           description: Filter requests by subject DID.
           schema:
             example: did:via:humanos:user-123
             type: string
-        - name: subjectContact
+        - name: contact
           required: false
           in: query
           description: Filter requests by subject contact (email or phone).
           schema:
             example: user@example.com
             type: string
-        - name: subjectInternalId
+        - name: internalId
           required: false
           in: query
           description: Filter requests by subject internal ID.
@@ -340,7 +340,7 @@ paths:
         via email or SMS (depending on their contact type) with a code and a
         signing URL.
 
-        Exactly one of the query parameters (contact, contactDid, internalId) must be provided
+        Exactly one of the query parameters (contact, did, internalId) must be provided
         to identify the subject.
 
         The endpoint validates:
@@ -365,7 +365,7 @@ paths:
           schema:
             example: user@example.com
             type: string
-        - name: contactDid
+        - name: did
           required: false
           in: query
           description: DID associated with the subject contact
@@ -537,7 +537,7 @@ paths:
     get:
       description: >-
         Retrieves detailed information about a user by their contact,
-        contactDid, or internalId. Exactly one search parameter must be
+        did, or internalId. Exactly one search parameter must be
         provided. Returns contact information, identity data (if available), and
         the internal ID assigned by the organization.
       operationId: getSubject
@@ -549,7 +549,7 @@ paths:
           schema:
             example: user@example.com
             type: string
-        - name: contactDid
+        - name: did
           required: false
           in: query
           description: DID associated with the contact to search for the user
@@ -572,7 +572,7 @@ paths:
                 $ref: '#/components/schemas/GetSubjectResponseDto'
         '400':
           description: >-
-            Invalid request parameters. Exactly one of contact, contactDid, or
+            Invalid request parameters. Exactly one of contact, did, or
             internalId must be provided.
           content:
             application/json:
@@ -931,15 +931,15 @@ components:
           description: Search query to filter by name. Case-insensitive partial match.
           example: example
           maxLength: 120
-        subjectDid:
+        did:
           type: string
           description: Filter requests by subject DID.
           example: did:via:humanos:user-123
-        subjectContact:
+        contact:
           type: string
           description: Filter requests by subject contact (email or phone).
           example: user@example.com
-        subjectInternalId:
+        internalId:
           type: string
           description: Filter requests by subject internal ID.
           example: internal-user-12345
@@ -1665,7 +1665,7 @@ components:
           type: string
           description: Contact value (email or phone) to search for the user
           example: user@example.com
-        contactDid:
+        did:
           type: string
           description: DID associated with the contact to search for the user
           example: did:via:humanos:user-abc123

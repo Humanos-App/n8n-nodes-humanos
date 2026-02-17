@@ -25,7 +25,7 @@ export class HumanosGetUser implements INodeType {
         type: "options",
         options: [
           { name: "Contact (Email/Phone)", value: "contact" },
-          { name: "Contact DID", value: "contactDid" },
+          { name: "Contact DID", value: "did" },
           { name: "Internal ID", value: "internalId" },
         ],
         default: "contact",
@@ -48,7 +48,7 @@ export class HumanosGetUser implements INodeType {
       },
       {
         displayName: "Contact DID",
-        name: "contactDid",
+        name: "did",
         type: "string",
         default: "",
         description: "DID associated with the user contact (e.g., did:via:humanos:user-abc123)",
@@ -56,7 +56,7 @@ export class HumanosGetUser implements INodeType {
         placeholder: "did:via:humanos:user-abc123",
         displayOptions: {
           show: {
-            lookupBy: ["contactDid"],
+            lookupBy: ["did"],
           },
         },
       },
@@ -90,8 +90,8 @@ export class HumanosGetUser implements INodeType {
     const qs: Record<string, string> = {};
     if (lookupBy === "contact") {
       qs.contact = this.getNodeParameter("contact", 0) as string;
-    } else if (lookupBy === "contactDid") {
-      qs.contactDid = this.getNodeParameter("contactDid", 0) as string;
+    } else if (lookupBy === "did") {
+      qs.did = this.getNodeParameter("did", 0) as string;
     } else if (lookupBy === "internalId") {
       qs.internalId = this.getNodeParameter("internalId", 0) as string;
     }

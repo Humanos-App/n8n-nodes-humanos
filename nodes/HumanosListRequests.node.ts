@@ -45,21 +45,21 @@ export class HumanosListRequests implements INodeType {
       },
       {
         displayName: "Subject DID",
-        name: "subjectDid",
+        name: "did",
         type: "string",
         default: "",
         description: "Filter requests by subject DID (e.g., did:via:humanos:user-123)",
       },
       {
         displayName: "Subject Contact",
-        name: "subjectContact",
+        name: "contact",
         type: "string",
         default: "",
         description: "Filter requests by subject contact (email or phone)",
       },
       {
         displayName: "Subject Internal ID",
-        name: "subjectInternalId",
+        name: "internalId",
         type: "string",
         default: "",
         description: "Filter requests by subject internal ID",
@@ -112,9 +112,9 @@ export class HumanosListRequests implements INodeType {
     const pageIndex = this.getNodeParameter("pageIndex", 0) as number;
     const pageSize = this.getNodeParameter("pageSize", 0) as number;
     const search = this.getNodeParameter("search", 0) as string;
-    const subjectDid = this.getNodeParameter("subjectDid", 0) as string;
-    const subjectContact = this.getNodeParameter("subjectContact", 0) as string;
-    const subjectInternalId = this.getNodeParameter("subjectInternalId", 0) as string;
+    const did = this.getNodeParameter("did", 0) as string;
+    const contact = this.getNodeParameter("contact", 0) as string;
+    const internalId = this.getNodeParameter("internalId", 0) as string;
     const agentDid = this.getNodeParameter("agentDid", 0) as string;
     const securityLevel = this.getNodeParameter("securityLevel", 0) as string[];
     const dateFrom = this.getNodeParameter("dateFrom", 0) as string;
@@ -126,9 +126,9 @@ export class HumanosListRequests implements INodeType {
     };
 
     if (search) qs.search = search;
-    if (subjectDid) qs.subjectDid = subjectDid;
-    if (subjectContact) qs.subjectContact = subjectContact;
-    if (subjectInternalId) qs.subjectInternalId = subjectInternalId;
+    if (did) qs.did = did;
+    if (contact) qs.contact = contact;
+    if (internalId) qs.internalId = internalId;
     if (agentDid) qs.agentDid = agentDid;
     if (securityLevel && securityLevel.length > 0)
       qs.securityLevel = securityLevel;
