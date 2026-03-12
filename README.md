@@ -1,4 +1,4 @@
-# @humanos-ai/n8n-nodes
+# @humanos-ai/n8n-nodes-humanos
 
 This is an n8n community node package for integrating with the [Humanos](https://humanos.id) API. It provides nodes for KYC verification, identity management, credential requests, and webhook handling.
 
@@ -11,14 +11,14 @@ Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes
 ### npm
 
 ```bash
-npm install @humanos-ai/n8n-nodes
+npm install @humanos-ai/n8n-nodes-humanos
 ```
 
 ### In n8n
 
 1. Go to **Settings > Community Nodes**
 2. Select **Install**
-3. Enter `@humanos-ai/n8n-nodes` and click **Install**
+3. Enter `@humanos-ai/n8n-nodes-humanos` and click **Install**
 
 ## Nodes
 
@@ -84,7 +84,7 @@ Link the package to your local n8n installation:
 ```bash
 npm link
 cd ~/.n8n/custom
-npm link @humanos-ai/n8n-nodes
+npm link @humanos-ai/n8n-nodes-humanos
 ```
 
 Then restart n8n to load the nodes.
@@ -98,3 +98,4 @@ Then restart n8n to load the nodes.
 - [n8n Community Nodes Documentation](https://docs.n8n.io/integrations/community-nodes/)
 - [Humanos Website](https://humanos.id)
 - [Humanos API Documentation](https://documenter.getpostman.com/view/47566781/2sB3HevPTe)
+- [n8n Creator Portal](https://creators.n8n.io/nodes)

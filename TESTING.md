@@ -23,7 +23,7 @@ mkdir -p ~/.n8n/custom
 # Link the package
 npm link
 cd ~/.n8n/custom
-npm link @humanos-ai/n8n-nodes
+npm link @humanos-ai/n8n-nodes-humanos
 ```
 
 ### 3. Start n8n

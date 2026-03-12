@@ -1,6 +1,6 @@
 {
-  "name": "@humanos-ai/n8n-nodes",
-  "version": "1.1.0",
+  "name": "@humanos-ai/n8n-nodes-humanos",
+  "version": "1.1.1",
   "type": "commonjs",
   "main": "dist/index.js",
   "description": "n8n community nodes for integrating with the Humanos API - KYC, identity verification, and credential management",
